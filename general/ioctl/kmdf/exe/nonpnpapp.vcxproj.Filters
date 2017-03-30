@@ -15,11 +15,18 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="install.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="testapp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="install.c" />
+    <ClCompile Include="testapp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="install.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="fastrpc.asm">
+      <Filter>Source Files</Filter>
+    </MASM>
   </ItemGroup>
 </Project>

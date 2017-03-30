@@ -360,6 +360,39 @@ main(
 }
 
 
+
+enum { SystemModuleInformation = 11 };
+
+typedef struct _RTL_PROCESS_MODULE_INFORMATION {
+    ULONG Section;
+    PVOID MappedBase;
+    PVOID ImageBase;
+    ULONG ImageSize;
+    ULONG Flags;
+    USHORT LoadOrderIndex;
+    USHORT InitOrderIndex;
+    USHORT LoadCount;
+    USHORT OffsetToFileName;
+    CHAR FullPathName[256];
+} RTL_PROCESS_MODULE_INFORMATION, *PRTL_PROCESS_MODULE_INFORMATION;
+
+typedef struct _RTL_PROCESS_MODULES {
+    ULONG NumberOfModules;
+    RTL_PROCESS_MODULE_INFORMATION Modules[1];
+} RTL_PROCESS_MODULES, *PRTL_PROCESS_MODULES;
+
+typedef int (*NtQuerySystemInformationFunc)(
+    _In_      DWORD SystemInformationClass,
+    _Inout_   PVOID                    SystemInformation,
+    _In_      ULONG                    SystemInformationLength,
+    _Out_opt_ PULONG                   ReturnLength
+);
+
+
+	extern unsigned long long ReadFSBase();
+	extern unsigned long long WriteFSBase(unsigned long long);
+
+
 VOID
 DoIoctls(
     HANDLE hDevice
@@ -369,6 +402,24 @@ DoIoctls(
     char InputBuffer[200];
     BOOL bRc;
     ULONG bytesReturned;
+
+
+
+    NtQuerySystemInformationFunc NtQuerySystemInformation = NULL;
+    HMODULE hNtdll = NULL;
+    ULONG64 KernelBase = 0;
+    RTL_PROCESS_MODULES ModuleInfo = { 0 };
+
+    // Get the address of NtQuerySystemInformation
+    hNtdll = GetModuleHandle("ntdll");
+    NtQuerySystemInformation = (NtQuerySystemInformationFunc)GetProcAddress(hNtdll, "NtQuerySystemInformation");
+
+    // Get the base address of the kernel
+    NtQuerySystemInformation(SystemModuleInformation, &ModuleInfo, sizeof(ModuleInfo), NULL);
+    KernelBase = (ULONG64)ModuleInfo.Modules[0].ImageBase;
+
+
+	printf("KernelBase:%llx\n", KernelBase);
 
     //
     // Printing Input & Output buffer pointers and size
@@ -488,11 +539,14 @@ DoIoctls(
     }
 
     memset(OutputBuffer, 0, sizeof(OutputBuffer));
+	*(unsigned long long*)InputBuffer = KernelBase;
+
+	unsigned long long fs_base = ReadFSBase();
 
     bRc = DeviceIoControl ( hDevice,
                             (DWORD) IOCTL_NONPNP_METHOD_OUT_DIRECT,
                             InputBuffer,
-                            (DWORD) strlen( InputBuffer )+1,
+                            8/*(DWORD) strlen( InputBuffer )+1*/,
                             OutputBuffer,
                             sizeof( OutputBuffer),
                             &bytesReturned,
@@ -504,8 +558,11 @@ DoIoctls(
         printf ( "Error in DeviceIoControl : : %d", GetLastError());
         return;
     }
+	WriteFSBase(fs_base+8);
+	Sleep(2);
 
-    printf("    OutBuffer (%d): %s\n", bytesReturned, OutputBuffer);
+    printf("    OutBuffer (%d): %llx\n", bytesReturned, *(unsigned long long*)OutputBuffer);
+	printf("FS_BASE:%llx\n", ReadFSBase());
 
     return;
 

@@ -159,6 +159,8 @@ Return Value:
         return  FALSE;
     }
 
+
+	printf("CREATE: DriverName:%s ServiceExe:%s\n", DriverName, ServiceExe);
     //
     // Create a new a service object.
     //
