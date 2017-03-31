@@ -767,7 +767,9 @@ Return Value:
 extern void HandleIRET();
 extern void HandleSYSRET();
 extern void HandleIRETGS();
-unsigned long long kernel_base_addr = 0;
+unsigned long long kernelBaseAddr = 0;
+unsigned long long fsBaseAddr = 0;
+unsigned long long gsBaseAddr = 0;
 unsigned long long _HandleIRET = 0;
 unsigned long long _HandleIRETGS = 0;
 unsigned long long _HandleSYSRET = 0;
@@ -776,14 +778,13 @@ int already_patched = 0;
 extern void XchgVal(unsigned long long *ptr, unsigned long long a);
 
 
-void
-PatchPico(unsigned long long base_addr)
+void PatchPico()
 {
-	unsigned char* ptr = (unsigned char*)(base_addr + (0x14067BBB9 - 0x140000000));
-	unsigned long long *src, *dst;
+	unsigned char* ptr = (unsigned char*)(kernelBaseAddr + (0x14067BBB9 - 0x140000000));
+	unsigned long long *src, *dst, *src1;
 	int i;
 
-	if (already_patched)
+	if (already_patched || !kernelBaseAddr)
 	{
 		return;
 	}
@@ -804,43 +805,49 @@ PatchPico(unsigned long long base_addr)
 	src = (unsigned long long*)(unsigned long long)HandleIRETGS;
 	dst = (unsigned long long*)_HandleIRETGS;
 
+
 	for (i = 0; i < 100/8; i++)
 	{
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
+	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 2);
+	*src1 = fsBaseAddr;
 
 	src = (unsigned long long*)(unsigned long long)HandleSYSRET;
 	dst = (unsigned long long*)_HandleSYSRET;
 
+
 	for (i = 0; i < 100/8; i++)
 	{
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
+	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 2);
+	*src1 = fsBaseAddr;
 }
 
 
 int
-PatchKernel(unsigned long long base_addr)
+PatchKernel()
 {
 	int i;
 	unsigned char *target;
 	long long diff, diff1;
 	unsigned char *func;
 
-	if (!_HandleIRET || !_HandleIRETGS || already_patched)
+	if (!_HandleIRET || !_HandleIRETGS || already_patched || !kernelBaseAddr)
 	{
 		return 0;
 	}
 
 	for (i = 0; i < sizeof(iret_funcs)/8; i++)
 	{
-		target = (unsigned char*)(base_addr + (iret_funcs[i] - 0x140000000));
+		target = (unsigned char*)(kernelBaseAddr + (iret_funcs[i] - 0x140000000));
 		func = (target[2] == 0x55) ? (unsigned char*)_HandleIRET : (unsigned char*)_HandleIRETGS;
 		diff = func - target - 5;
 		diff1 = (diff < 0) ? -diff : diff;
-		if (diff1 < 0xffffffff)
+		if (diff1 < 0xffffffff && target[2] != 0x55)
 		{
 			unsigned char val[8] = {0xe9};
 			unsigned long long newval;
@@ -849,7 +856,6 @@ PatchKernel(unsigned long long base_addr)
 			newval = *(unsigned long long*)val;
 			//*(unsigned long long*)target = *(unsigned long long*)val;
 			XchgVal((unsigned long long*)target, newval);
-			kernel_base_addr = base_addr;
 			already_patched = 1;
 		}
 		else
@@ -860,7 +866,7 @@ PatchKernel(unsigned long long base_addr)
 
 	for (i = 0; i < sizeof(sysret_funcs)/8; i++)
 	{
-		target = (unsigned char*)(base_addr + (sysret_funcs[i] - 0x140000000));
+		target = (unsigned char*)(kernelBaseAddr + (sysret_funcs[i] - 0x140000000));
 		func = (unsigned char*)_HandleSYSRET;
 		diff = func - target - 5;
 		diff1 = (diff < 0) ? -diff : diff;
@@ -873,7 +879,6 @@ PatchKernel(unsigned long long base_addr)
 			newval = *(unsigned long long*)val;
 			//*(unsigned long long*)target = *(unsigned long long*)val;
 			XchgVal((unsigned long long*)target, newval);
-			kernel_base_addr = base_addr;
 			already_patched = 1;
 		}
 		else
@@ -892,14 +897,14 @@ UnpatchKernel()
 	int i;
 	unsigned char *target;
 
-	if (!kernel_base_addr)
+	if (!kernelBaseAddr)
 	{
 		return;
 	}
 
 	for (i = 0; i < sizeof(iret_funcs)/8; i++)
 	{
-		target = (unsigned char*)(kernel_base_addr + (iret_funcs[i] - 0x140000000));
+		target = (unsigned char*)(kernelBaseAddr + (iret_funcs[i] - 0x140000000));
 		if (target[5] == 0x55)
 		{
 			//*(unsigned long long*)target =  0xd04d8b4cd8558b4c;
@@ -913,7 +918,7 @@ UnpatchKernel()
 	}
 	for (i = 0; i < sizeof(sysret_funcs)/8; i++)
 	{
-		target = (unsigned char*)(kernel_base_addr + (sysret_funcs[i] - 0x140000000));
+		target = (unsigned char*)(kernelBaseAddr + (sysret_funcs[i] - 0x140000000));
 		XchgVal((unsigned long long*)target, 0x10fe08b49e98b49);
 	}
 }
@@ -962,7 +967,6 @@ Return Value:
     PCHAR               buffer = NULL;
     PREQUEST_CONTEXT    reqContext = NULL;
     size_t               bufSize;
-	unsigned long long  baseaddr = 0;
 
     UNREFERENCED_PARAMETER( Queue );
 
@@ -1107,7 +1111,7 @@ Return Value:
         // Get the Input buffer. WdfRequestRetrieveInputBuffer returns
         // Irp->AssociatedIrp.SystemBuffer.
         //
-        status = WdfRequestRetrieveInputBuffer(Request, 8, &inBuf, &bufSize);
+        status = WdfRequestRetrieveInputBuffer(Request, 24, &inBuf, &bufSize);
         if(!NT_SUCCESS(status)) {
             status = STATUS_INSUFFICIENT_RESOURCES;
             break;
@@ -1118,8 +1122,10 @@ Return Value:
         Hexdump((TRACE_LEVEL_VERBOSE,  DBG_IOCTL, "Data from User : %!HEXDUMP!\n",
                         log_xstr(inBuf, (USHORT)InputBufferLength)));
         PrintChars(inBuf, InputBufferLength);
-		baseaddr = *(unsigned long long*)inBuf;
-		//baseaddr = 0x1abcd;
+
+		kernelBaseAddr = ((unsigned long long*)inBuf)[0];
+		gsBaseAddr = ((unsigned long long*)inBuf)[1];
+		fsBaseAddr = ((unsigned long long*)inBuf)[2];
 
         //
         // Get the output buffer. Framework calls MmGetSystemAddressForMdlSafe
@@ -1146,34 +1152,13 @@ Return Value:
 		//((unsigned long long*)t)[29] = 0x12456789000;
 		unsigned long long func = (unsigned long long)HandleIRET;
     	RtlCopyMemory(buffer, (PCHAR)&func, 8);
-		PatchPico(baseaddr);
-		if (!PatchKernel(baseaddr))
+		PatchPico();
+		if (!PatchKernel())
 		{
             status = STATUS_INSUFFICIENT_RESOURCES;
             break;
 		}
-
-#if 0
-		ptr = (PCHAR)(baseaddr + (0x140153ACE - 0x140000000));
-		ptr[0] = 0x90;
-		ptr[1] = 0x90;
-
-		ptr = (PCHAR)(baseaddr + (0x14020711C - 0x140000000));
-		ptr[0] = 0x90;
-		ptr[1] = 0x90;
-
-
-
-		ptr = (PCHAR)(baseaddr + (0x1403BE0DD - 0x140000000));
-		ptr[0] = 0x90;
-		ptr[1] = 0x90;
-		ptr[2] = 0x90;
-#endif
-
-
-
     	//RtlCopyMemory(buffer, ptr, OutputBufferLength);
-
 
         Hexdump((TRACE_LEVEL_VERBOSE,  DBG_IOCTL, "Data to User : %!HEXDUMP!\n",
                         log_xstr(buffer, (USHORT)datalen)));

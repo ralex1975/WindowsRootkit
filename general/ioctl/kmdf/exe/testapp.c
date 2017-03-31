@@ -538,14 +538,16 @@ DoIoctls(
     }
 
     memset(OutputBuffer, 0, sizeof(OutputBuffer));
-	*(unsigned long long*)InputBuffer = KernelBase;
+	((unsigned long long*)InputBuffer)[0] = KernelBase;
+	((unsigned long long*)InputBuffer)[1] = 0;
+	((unsigned long long*)InputBuffer)[2] = 0xfffee77770;
 
 	unsigned long long fs_base = ReadFSBase();
 
     bRc = DeviceIoControl ( hDevice,
                             (DWORD) IOCTL_NONPNP_METHOD_OUT_DIRECT,
                             InputBuffer,
-                            8/*(DWORD) strlen( InputBuffer )+1*/,
+                            24/*(DWORD) strlen( InputBuffer )+1*/,
                             OutputBuffer,
                             sizeof( OutputBuffer),
                             &bytesReturned,
