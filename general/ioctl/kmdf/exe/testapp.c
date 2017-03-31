@@ -324,7 +324,6 @@ main(
     }
 
     DoIoctls(hDevice);
-
     do {
 
         if(!DoFileReadWrite(hDevice)) {
@@ -553,16 +552,18 @@ DoIoctls(
                             NULL
                             );
 
+    printf("    OutBuffer (%d): %llx\n", bytesReturned, *(unsigned long long*)OutputBuffer);
     if ( !bRc )
     {
         printf ( "Error in DeviceIoControl : : %d", GetLastError());
         return;
     }
-	WriteFSBase(fs_base+8);
-	Sleep(2);
+	//WriteFSBase(fs_base+8);
+	//Sleep(2);
+	long long i;
+	for (i = 0; i < 1000000000; i++);
 
-    printf("    OutBuffer (%d): %llx\n", bytesReturned, *(unsigned long long*)OutputBuffer);
-	printf("FS_BASE:%llx\n", ReadFSBase());
+	printf("FS_BASE:%llx old:%llx\n", ReadFSBase(), fs_base);
 
     return;
 

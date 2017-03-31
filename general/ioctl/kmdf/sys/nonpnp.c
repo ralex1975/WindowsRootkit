@@ -42,6 +42,8 @@ Environment:
 //#include <ntddk.h>
 #include <Wdm.h>
 
+#include "iret_header.h"
+
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text( INIT, DriverEntry )
@@ -762,6 +764,163 @@ Return Value:
 
 }
 
+extern void HandleIRET();
+extern void HandleSYSRET();
+extern void HandleIRETGS();
+unsigned long long kernel_base_addr = 0;
+unsigned long long _HandleIRET = 0;
+unsigned long long _HandleIRETGS = 0;
+unsigned long long _HandleSYSRET = 0;
+int already_patched = 0;
+
+extern void XchgVal(unsigned long long *ptr, unsigned long long a);
+
+
+void
+PatchPico(unsigned long long base_addr)
+{
+	unsigned char* ptr = (unsigned char*)(base_addr + (0x14067BBB9 - 0x140000000));
+	unsigned long long *src, *dst;
+	int i;
+
+	if (already_patched)
+	{
+		return;
+	}
+
+	_HandleIRET = (unsigned long long)ptr;
+	_HandleIRETGS = (unsigned long long)ptr + 100;
+	_HandleSYSRET = (unsigned long long)ptr + 200;
+
+	src = (unsigned long long*)(unsigned long long)HandleIRET;
+	dst = (unsigned long long*)_HandleIRET;
+
+	for (i = 0; i < 100/8; i++)
+	{
+		//dst[i] = src[i];
+		XchgVal(&dst[i], src[i]);
+	}
+	
+	src = (unsigned long long*)(unsigned long long)HandleIRETGS;
+	dst = (unsigned long long*)_HandleIRETGS;
+
+	for (i = 0; i < 100/8; i++)
+	{
+		//dst[i] = src[i];
+		XchgVal(&dst[i], src[i]);
+	}
+
+	src = (unsigned long long*)(unsigned long long)HandleSYSRET;
+	dst = (unsigned long long*)_HandleSYSRET;
+
+	for (i = 0; i < 100/8; i++)
+	{
+		//dst[i] = src[i];
+		XchgVal(&dst[i], src[i]);
+	}
+}
+
+
+int
+PatchKernel(unsigned long long base_addr)
+{
+	int i;
+	unsigned char *target;
+	long long diff, diff1;
+	unsigned char *func;
+
+	if (!_HandleIRET || !_HandleIRETGS || already_patched)
+	{
+		return 0;
+	}
+
+	for (i = 0; i < sizeof(iret_funcs)/8; i++)
+	{
+		target = (unsigned char*)(base_addr + (iret_funcs[i] - 0x140000000));
+		func = (target[2] == 0x55) ? (unsigned char*)_HandleIRET : (unsigned char*)_HandleIRETGS;
+		diff = func - target - 5;
+		diff1 = (diff < 0) ? -diff : diff;
+		if (diff1 < 0xffffffff)
+		{
+			unsigned char val[8] = {0xe9};
+			unsigned long long newval;
+			*(long*)&val[1] = (long)diff;
+			val[5] = target[2];
+			newval = *(unsigned long long*)val;
+			//*(unsigned long long*)target = *(unsigned long long*)val;
+			XchgVal((unsigned long long*)target, newval);
+			kernel_base_addr = base_addr;
+			already_patched = 1;
+		}
+		else
+		{
+			//return 0;
+		}
+	}
+
+	for (i = 0; i < sizeof(sysret_funcs)/8; i++)
+	{
+		target = (unsigned char*)(base_addr + (sysret_funcs[i] - 0x140000000));
+		func = (unsigned char*)_HandleSYSRET;
+		diff = func - target - 5;
+		diff1 = (diff < 0) ? -diff : diff;
+		if (diff1 < 0xffffffff)
+		{
+			unsigned char val[8] = {0xe9};
+			unsigned long long newval;
+			*(long*)&val[1] = (long)diff;
+			val[5] = target[2];
+			newval = *(unsigned long long*)val;
+			//*(unsigned long long*)target = *(unsigned long long*)val;
+			XchgVal((unsigned long long*)target, newval);
+			kernel_base_addr = base_addr;
+			already_patched = 1;
+		}
+		else
+		{
+			//return 0;
+		}
+	}
+
+	return 1;
+}
+
+
+void
+UnpatchKernel()
+{
+	int i;
+	unsigned char *target;
+
+	if (!kernel_base_addr)
+	{
+		return;
+	}
+
+	for (i = 0; i < sizeof(iret_funcs)/8; i++)
+	{
+		target = (unsigned char*)(kernel_base_addr + (iret_funcs[i] - 0x140000000));
+		if (target[5] == 0x55)
+		{
+			//*(unsigned long long*)target =  0xd04d8b4cd8558b4c;
+			XchgVal((unsigned long long*)target, 0xd04d8b4cd8558b4c);
+		}
+		else if (target[5] == 0x4D)
+		{
+			//*(unsigned long long*)target =  0xc8458b4cd04d8b4c;
+			XchgVal((unsigned long long*)target, 0xc8458b4cd04d8b4c);
+		}
+	}
+	for (i = 0; i < sizeof(sysret_funcs)/8; i++)
+	{
+		target = (unsigned char*)(kernel_base_addr + (sysret_funcs[i] - 0x140000000));
+		XchgVal((unsigned long long*)target, 0x10fe08b49e98b49);
+	}
+}
+
+
+
+
 VOID
 FileEvtIoDeviceControl(
     IN WDFQUEUE         Queue,
@@ -985,22 +1144,31 @@ Return Value:
 		//((unsigned long long*)t)[30] = 0x12345678912;
 		//((unsigned long long*)t)[29] = 0x99999999999;
 		//((unsigned long long*)t)[29] = 0x12456789000;
-    	RtlCopyMemory(buffer, (PCHAR)&baseaddr, 8);
-//#if 0
-		PCHAR ptr = (PCHAR)(baseaddr + (0x140153B3B - 0x140000000));
-		ptr[0] = 0x90;
-		ptr[1] = 0x90;
+		unsigned long long func = (unsigned long long)HandleIRET;
+    	RtlCopyMemory(buffer, (PCHAR)&func, 8);
+		PatchPico(baseaddr);
+		if (!PatchKernel(baseaddr))
+		{
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            break;
+		}
 
+#if 0
 		ptr = (PCHAR)(baseaddr + (0x140153ACE - 0x140000000));
 		ptr[0] = 0x90;
 		ptr[1] = 0x90;
+
+		ptr = (PCHAR)(baseaddr + (0x14020711C - 0x140000000));
+		ptr[0] = 0x90;
+		ptr[1] = 0x90;
+
 
 
 		ptr = (PCHAR)(baseaddr + (0x1403BE0DD - 0x140000000));
 		ptr[0] = 0x90;
 		ptr[1] = 0x90;
 		ptr[2] = 0x90;
-//#endif
+#endif
 
 
 
@@ -1310,6 +1478,7 @@ Return Value:
 
 --*/
 {
+	UnpatchKernel();
     UNREFERENCED_PARAMETER(Driver);
 
     PAGED_CODE();
