@@ -390,6 +390,8 @@ typedef int (*NtQuerySystemInformationFunc)(
 
 	extern unsigned long long ReadFSBase();
 	extern unsigned long long WriteFSBase(unsigned long long);
+	extern unsigned long long ReadGSBase();
+	extern unsigned long long WriteGSBase(unsigned long long);
 
 
 VOID
@@ -539,10 +541,11 @@ DoIoctls(
 
     memset(OutputBuffer, 0, sizeof(OutputBuffer));
 	((unsigned long long*)InputBuffer)[0] = KernelBase;
-	((unsigned long long*)InputBuffer)[1] = 0;
+	((unsigned long long*)InputBuffer)[1] = 0xfffaa77770;
 	((unsigned long long*)InputBuffer)[2] = 0xfffee77770;
 
 	unsigned long long fs_base = ReadFSBase();
+	unsigned long long gs_base = ReadGSBase();
 
     bRc = DeviceIoControl ( hDevice,
                             (DWORD) IOCTL_NONPNP_METHOD_OUT_DIRECT,
@@ -554,7 +557,7 @@ DoIoctls(
                             NULL
                             );
 
-    printf("    OutBuffer (%d): %llx\n", bytesReturned, *(unsigned long long*)OutputBuffer);
+    //printf("    OutBuffer (%d): %llx\n", bytesReturned, *(unsigned long long*)OutputBuffer);
     if ( !bRc )
     {
         printf ( "Error in DeviceIoControl : : %d", GetLastError());
@@ -564,8 +567,10 @@ DoIoctls(
 	//Sleep(2);
 	long long i;
 	for (i = 0; i < 1000000000; i++);
+	unsigned long long gs_base1 = ReadGSBase();
+	WriteGSBase(gs_base);
 
-	printf("FS_BASE:%llx old:%llx\n", ReadFSBase(), fs_base);
+	printf("FS_BASE:%llx old:%llx gs_base:%llx gs_base1:%llx\n", ReadFSBase(), fs_base, gs_base, gs_base1);
 
     return;
 

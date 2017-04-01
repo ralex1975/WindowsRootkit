@@ -44,6 +44,10 @@ Environment:
 
 #include "iret_header.h"
 
+unsigned long long app_thread = 0;
+
+extern void SetAppThread();
+
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text( INIT, DriverEntry )
@@ -1152,6 +1156,7 @@ Return Value:
 		//((unsigned long long*)t)[29] = 0x12456789000;
 		unsigned long long func = (unsigned long long)HandleIRET;
     	RtlCopyMemory(buffer, (PCHAR)&func, 8);
+		SetAppThread();
 		PatchPico();
 		if (!PatchKernel())
 		{
