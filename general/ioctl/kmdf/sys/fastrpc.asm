@@ -44,7 +44,7 @@ iretq
 HandleIRETGS ENDP
 
 
-HandleIRETGS PROC EXPORT
+HandleIRET PROC EXPORT
 mov r10, [rbp-28h]
 mov r9, [rbp-30h]
 mov r8, [rbp-38h]
