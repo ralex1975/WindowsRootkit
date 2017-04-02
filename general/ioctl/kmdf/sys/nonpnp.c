@@ -972,17 +972,15 @@ Return Value:
 {
     NTSTATUS            status = STATUS_SUCCESS;// Assume success
     PCHAR               inBuf = NULL; // pointer to Input and output buffer
-    PCHAR               data = "blah String is from Device Driver !!!";
-    ULONG               datalen = (ULONG) strlen(data)+1;//Length of data including null
-    PCHAR               buffer = NULL;
-    size_t               bufSize;
+	size_t bufSize = 0;
 
     UNREFERENCED_PARAMETER( Queue );
+    UNREFERENCED_PARAMETER( OutputBufferLength );
 
     PAGED_CODE();
 
     if(IoControlCode == IOCTL_NONPNP_METHOD_PATCH_KERNEL &&
-	   (!OutputBufferLength || !InputBufferLength))
+	   (/*!OutputBufferLength ||*/ !InputBufferLength))
     {
         WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
         return;
@@ -999,11 +997,8 @@ Return Value:
 
         TraceEvents(TRACE_LEVEL_VERBOSE, DBG_IOCTL, "Called IOCTL_NONPNP_METHOD_OUT_DIRECT\n");
 
-        //
-        // Get the Input buffer. WdfRequestRetrieveInputBuffer returns
-        // Irp->AssociatedIrp.SystemBuffer.
-        //
         status = WdfRequestRetrieveInputBuffer(Request, 24, &inBuf, &bufSize);
+
         if(!NT_SUCCESS(status)) {
             status = STATUS_INSUFFICIENT_RESOURCES;
             break;
@@ -1011,26 +1006,16 @@ Return Value:
 
         ASSERT(bufSize == InputBufferLength);
 
-        Hexdump((TRACE_LEVEL_VERBOSE,  DBG_IOCTL, "Data from User : %!HEXDUMP!\n",
-                        log_xstr(inBuf, (USHORT)InputBufferLength)));
-        PrintChars(inBuf, InputBufferLength);
-
 		kernelBaseAddr = ((unsigned long long*)inBuf)[0];
 		gsBaseAddr = ((unsigned long long*)inBuf)[1];
 		fsBaseAddr = ((unsigned long long*)inBuf)[2];
 
-        //
-        // Get the output buffer. Framework calls MmGetSystemAddressForMdlSafe
-        // on the Irp->MdlAddress and returns the system address.
-        // For this method, this buffer is intended for transfering data from the
-        // driver to the application.
-        //
-        status = WdfRequestRetrieveOutputBuffer(Request, 0, &buffer, &bufSize);
+        /*status = WdfRequestRetrieveOutputBuffer(Request, 0, &buffer, &bufSize);
         if(!NT_SUCCESS(status)) {
             break;
         }
 
-        ASSERT(bufSize == OutputBufferLength);
+        ASSERT(bufSize == OutputBufferLength);*/
 
         //
         // Write data to be sent to the user in this buffer
@@ -1040,29 +1025,17 @@ Return Value:
 		//PETHREAD t = PsGetCurrentThread();
     	//RtlCopyMemory(buffer, (PCHAR)t, OutputBufferLength);
 		//((unsigned long long*)t)[30] = 0x12345678912;
-		//((unsigned long long*)t)[29] = 0x99999999999;
-		//((unsigned long long*)t)[29] = 0x12456789000;
-		unsigned long long func = (unsigned long long)HandleIRET;
-    	RtlCopyMemory(buffer, (PCHAR)&func, 8);
+
 		PatchPico();
 		if (!PatchKernel())
 		{
             status = STATUS_INSUFFICIENT_RESOURCES;
             break;
 		}
-    	//RtlCopyMemory(buffer, ptr, OutputBufferLength);
 
-        Hexdump((TRACE_LEVEL_VERBOSE,  DBG_IOCTL, "Data to User : %!HEXDUMP!\n",
-                        log_xstr(buffer, (USHORT)datalen)));
-        PrintChars(buffer, datalen);
 
-        WdfRequestSetInformation(Request,
-                    OutputBufferLength < datalen? OutputBufferLength: datalen);
-
-        //
-        // NOTE: Changes made to the  SystemBuffer are not copied
-        // to the user input buffer by the I/O manager
-        //
+        //WdfRequestSetInformation(Request,
+          //          OutputBufferLength < datalen? OutputBufferLength: datalen);
 
         break;
 
@@ -1092,13 +1065,6 @@ Return Value:
                    Request, status );
 
     WdfRequestComplete( Request, status);
-
-//#ifdef NT_PICO
-	//t->Tcb = 0;
-//#endif
-
-	//WriteMxCsr(10, 10);
-	//ReadMxCsr(10, 10);
 }
 
 VOID
