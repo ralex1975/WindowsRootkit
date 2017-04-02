@@ -35,6 +35,7 @@ cmp eax, 1234h
 jne next
 mov rax, 0FF99977770h
 wrfsbase rax
+mov rax, 0FF99977770h
 wrgsbase rax
 
 next:
@@ -81,6 +82,7 @@ jne next
 
 mov rbp, 0FF99977770h
 wrfsbase  rbp
+mov rbp, 0FF99977770h
 wrgsbase  rbp
 
 next:

@@ -819,6 +819,9 @@ void PatchPico()
 	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 25 + 2);
 	*src1 = fsBaseAddr;
 
+	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 25 + 2 + 15);
+	*src1 = gsBaseAddr;
+
 	src = (unsigned long long*)(unsigned long long)HandleSYSRET;
 	dst = (unsigned long long*)_HandleSYSRET;
 
@@ -830,6 +833,8 @@ void PatchPico()
 	}
 	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 26 + 2);
 	*src1 = fsBaseAddr;
+	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 26 + 2 + 15);
+	*src1 = gsBaseAddr;
 }
 
 
