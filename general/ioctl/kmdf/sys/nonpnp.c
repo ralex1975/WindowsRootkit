@@ -1291,31 +1291,3 @@ Return Value:
 
     return;
 }
-
-VOID
-PrintChars(
-    _In_reads_(CountChars) PCHAR BufferAddress,
-    _In_ size_t CountChars
-    )
-{
-    if (CountChars) {
-
-        while (CountChars--) {
-
-            if (*BufferAddress > 31
-                 && *BufferAddress != 127) {
-
-                KdPrint (( "%c", *BufferAddress) );
-
-            } else {
-
-                KdPrint(( ".") );
-
-            }
-            BufferAddress++;
-        }
-        KdPrint (("\n"));
-    }
-    return;
-}
-
