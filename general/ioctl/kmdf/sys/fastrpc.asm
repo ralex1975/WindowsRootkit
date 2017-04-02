@@ -8,14 +8,14 @@ XchgVal ENDP
 
 SetAppThread PROC EXPORT
 mov rax, gs:[0188h]
-mov dword ptr [rax+0630h], 1234h
+mov dword ptr [rax+0996h], 1234h
 ret
 SetAppThread ENDP
 
 
 ResetAppThread PROC EXPORT
 mov rax, gs:[0188h]
-mov dword ptr [rax+0630h], 1235h
+mov dword ptr [rax+0996h], 1235h
 ret
 ResetAppThread ENDP
 
@@ -27,7 +27,7 @@ HandleIRETGS PROC EXPORT
 ; accordingly.
 
 mov rax, gs:[0188h]
-mov eax, [rax+0630h]
+mov eax, [rax+0996h]
 
 swapgs
 
@@ -73,7 +73,7 @@ HandleSYSRET PROC EXPORT
 ; accordingly.
 
 mov rbp, gs:[0188h]
-mov ebp, [rbp+0630h]
+mov ebp, [rbp+0996h]
 
 swapgs
 

@@ -846,9 +846,13 @@ PatchKernel()
 	long long diff, diff1;
 	unsigned char *func;
 
-	if (!_HandleIRET || !_HandleIRETGS || already_patched || !kernelBaseAddr)
+	if (!_HandleIRET || !_HandleIRETGS || !kernelBaseAddr)
 	{
 		return 0;
+	}
+	if (already_patched)
+	{
+		return 1;
 	}
 
 	for (i = 0; i < sizeof(iret_funcs)/8; i++)
@@ -972,7 +976,9 @@ Return Value:
 {
     NTSTATUS            status = STATUS_SUCCESS;// Assume success
     PCHAR               inBuf = NULL; // pointer to Input and output buffer
+    //PCHAR               outBuf = NULL; // pointer to Input and output buffer
 	size_t bufSize = 0;
+	//unsigned long long tid = (unsigned long long)PsGetCurrentThreadId();
 
     UNREFERENCED_PARAMETER( Queue );
     UNREFERENCED_PARAMETER( OutputBufferLength );
@@ -980,7 +986,7 @@ Return Value:
     PAGED_CODE();
 
     if(IoControlCode == IOCTL_NONPNP_METHOD_PATCH_KERNEL &&
-	   (/*!OutputBufferLength ||*/ !InputBufferLength))
+	   (!OutputBufferLength || !InputBufferLength))
     {
         WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
         return;
@@ -1010,17 +1016,17 @@ Return Value:
 		gsBaseAddr = ((unsigned long long*)inBuf)[1];
 		fsBaseAddr = ((unsigned long long*)inBuf)[2];
 
-        /*status = WdfRequestRetrieveOutputBuffer(Request, 0, &buffer, &bufSize);
+        /*status = WdfRequestRetrieveOutputBuffer(Request, 0, &outBuf, &bufSize);
         if(!NT_SUCCESS(status)) {
             break;
         }
 
-        ASSERT(bufSize == OutputBufferLength);*/
+        ASSERT(bufSize == OutputBufferLength);
 
         //
         // Write data to be sent to the user in this buffer
         //
-        //RtlCopyMemory(buffer, data, OutputBufferLength);
+        RtlCopyMemory(outBuf, (PCHAR)&tid, 8);*/
 
 		//PETHREAD t = PsGetCurrentThread();
     	//RtlCopyMemory(buffer, (PCHAR)t, OutputBufferLength);
@@ -1032,10 +1038,7 @@ Return Value:
             status = STATUS_INSUFFICIENT_RESOURCES;
             break;
 		}
-
-
-        //WdfRequestSetInformation(Request,
-          //          OutputBufferLength < datalen? OutputBufferLength: datalen);
+        WdfRequestSetInformation(Request, OutputBufferLength);
 
         break;
 
@@ -1047,6 +1050,13 @@ Return Value:
 
 	case IOCTL_NONPNP_SET_LIBRARY_GS:
 		{
+        	/*status = WdfRequestRetrieveInputBuffer(Request, 8, &inBuf, &bufSize);
+        	if(!NT_SUCCESS(status)) {
+            	status = STATUS_INSUFFICIENT_RESOURCES;
+            	break;
+        	}
+        	ASSERT(bufSize == InputBufferLength);*/
+
 			ResetAppThread();
 			break;
 		}
