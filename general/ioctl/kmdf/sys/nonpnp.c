@@ -47,6 +47,7 @@ Environment:
 unsigned long long app_thread = 0;
 
 extern void SetAppThread();
+extern void ResetAppThread();
 
 
 #ifdef ALLOC_PRAGMA
@@ -815,7 +816,7 @@ void PatchPico()
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
-	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 22+ 2);
+	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 25 + 2);
 	*src1 = fsBaseAddr;
 
 	src = (unsigned long long*)(unsigned long long)HandleSYSRET;
@@ -827,7 +828,7 @@ void PatchPico()
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
-	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 23 + 2);
+	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 26 + 2);
 	*src1 = fsBaseAddr;
 }
 
@@ -1106,7 +1107,7 @@ Return Value:
 
       break;
 
-    case IOCTL_NONPNP_METHOD_OUT_DIRECT:
+    case IOCTL_NONPNP_METHOD_PATCH_KERNEL:
 
 
         TraceEvents(TRACE_LEVEL_VERBOSE, DBG_IOCTL, "Called IOCTL_NONPNP_METHOD_OUT_DIRECT\n");
@@ -1156,7 +1157,6 @@ Return Value:
 		//((unsigned long long*)t)[29] = 0x12456789000;
 		unsigned long long func = (unsigned long long)HandleIRET;
     	RtlCopyMemory(buffer, (PCHAR)&func, 8);
-		SetAppThread();
 		PatchPico();
 		if (!PatchKernel())
 		{
@@ -1230,6 +1230,18 @@ Return Value:
 
             break;
         }
+    case IOCTL_NONPNP_SET_PUBLIC_GS:
+        {
+			SetAppThread();
+			break;
+		}
+
+	case IOCTL_NONPNP_SET_LIBRARY_GS:
+		{
+			ResetAppThread();
+			break;
+		}
+
     default:
 
         //

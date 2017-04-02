@@ -13,13 +13,29 @@ ret
 SetAppThread ENDP
 
 
+ResetAppThread PROC EXPORT
+mov rax, gs:[0188h]
+mov dword ptr [rax+0630h], 1235h
+ret
+ResetAppThread ENDP
+
+
 HandleIRETGS PROC EXPORT
+
+; If you change anything here
+; please change the PatchPico
+; accordingly.
+
 mov rax, gs:[0188h]
 mov eax, [rax+0630h]
+
+swapgs
+
 cmp eax, 1234h
 jne next
 mov rax, 0FF99977770h
 wrfsbase rax
+wrgsbase rax
 
 next:
 mov r9, [rbp-30h]
@@ -31,7 +47,6 @@ mov rsp, rbp
 mov rbp, [rbp+0D8h]
 add rsp, 0E8h
 
-swapgs
 iretq
 
 HandleIRETGS ENDP
@@ -51,19 +66,27 @@ iretq
 HandleIRET ENDP
 
 HandleSYSRET PROC EXPORT
+
+; If you change anything here
+; please change the PatchPico
+; accordingly.
+
 mov rbp, gs:[0188h]
 mov ebp, [rbp+0630h]
+
+swapgs
+
 cmp ebp, 1234h
 jne next
 
 mov rbp, 0FF99977770h
 wrfsbase  rbp
+wrgsbase  rbp
 
 next:
 mov rbp,r9
 mov rsp,r8
 
-swapgs
 sysretq
 HandleSYSRET ENDP
 

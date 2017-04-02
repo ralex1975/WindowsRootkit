@@ -544,11 +544,9 @@ DoIoctls(
 	((unsigned long long*)InputBuffer)[1] = 0xfffaa77770;
 	((unsigned long long*)InputBuffer)[2] = 0xfffee77770;
 
-	unsigned long long fs_base = ReadFSBase();
-	unsigned long long gs_base = ReadGSBase();
 
     bRc = DeviceIoControl ( hDevice,
-                            (DWORD) IOCTL_NONPNP_METHOD_OUT_DIRECT,
+                            (DWORD) IOCTL_NONPNP_METHOD_PATCH_KERNEL,
                             InputBuffer,
                             24/*(DWORD) strlen( InputBuffer )+1*/,
                             OutputBuffer,
@@ -563,12 +561,53 @@ DoIoctls(
         printf ( "Error in DeviceIoControl : : %d", GetLastError());
         return;
     }
+
+	unsigned long long fs_base = ReadFSBase();
+	unsigned long long gs_base = ReadGSBase();
+
+    bRc = DeviceIoControl ( hDevice,
+                            (DWORD) IOCTL_NONPNP_SET_PUBLIC_GS,
+                            InputBuffer,
+                            (DWORD) strlen( InputBuffer )+1,
+                            OutputBuffer,
+                            sizeof( OutputBuffer),
+                            &bytesReturned,
+                            NULL
+                            );
+
+ /*   if ( !bRc )
+    {
+        printf ( "Error in DeviceIoControl : %d\n", GetLastError());
+        return;
+
+    }*/
+
+
+
+
 	//WriteFSBase(fs_base+8);
 	//Sleep(2);
-	long long i;
-	for (i = 0; i < 1000000000; i++);
+	//long long i;
+	//for (i = 0; i < 1000000000; i++);
 	unsigned long long gs_base1 = ReadGSBase();
 	WriteGSBase(gs_base);
+	//
+    bRc = DeviceIoControl ( hDevice,
+                            (DWORD) IOCTL_NONPNP_SET_LIBRARY_GS,
+                            InputBuffer,
+                            (DWORD) strlen( InputBuffer )+1,
+                            OutputBuffer,
+                            sizeof( OutputBuffer),
+                            &bytesReturned,
+                            NULL
+                            );
+
+    /*if ( !bRc )
+    {
+        printf ( "Error in DeviceIoControl : %d\n", GetLastError());
+        return;
+
+    }*/
 
 	printf("FS_BASE:%llx old:%llx gs_base:%llx gs_base1:%llx\n", ReadFSBase(), fs_base, gs_base, gs_base1);
 
