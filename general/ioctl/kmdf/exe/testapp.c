@@ -47,6 +47,16 @@ _Analysis_mode_(_Analysis_code_type_user_code_)
 #include "public.h"
 
 
+VOID InitDev();
+VOID uFunc();
+VOID EnterU();
+VOID EnterL();
+extern ULONG64 ReadFSBase();
+extern ULONG64 WriteFSBase(ULONG64);
+extern ULONG64 ReadGSBase();
+extern ULONG64 WriteGSBase(ULONG64);
+
+
 BOOLEAN
 ManageDriver(
     IN LPCTSTR  DriverName,
@@ -117,77 +127,6 @@ ValidateCoinstallerVersion(
     return ok;
 }
 
-LONG
-Parse(
-    _In_ int argc,
-    _In_reads_(argc) char *argv[]
-    )
-/*++
-Routine Description:
-
-    Called by main() to parse command line parms
-
-Arguments:
-
-    argc and argv that was passed to main()
-
-Return Value:
-
-    Sets global flags as per user function request
-
---*/
-{
-    int i;
-    BOOL ok;
-    LONG error = ERROR_SUCCESS;
-
-    for (i=0; i<argc; i++) {
-        if (argv[i][0] == '-' ||
-            argv[i][0] == '/') {
-            switch(argv[i][1]) {
-            case 'V':
-            case 'v':
-                if (( (i+1 < argc ) &&
-                      ( argv[i+1][0] != '-' && argv[i+1][0] != '/'))) {
-                    //
-                    // use version in commandline
-                    //
-                    i++;
-                    ok = ValidateCoinstallerVersion(argv[i]);
-                    if (!ok) {
-                        printf("Not a valid format for coinstaller version\n"
-                               "It should be characters between A-Z, a-z , 0-9\n"
-                               "The version format is MMmmm where MM -- major #, mmm - serial#");
-                        error = ERROR_INVALID_PARAMETER;
-                        break;
-                    }
-                    if (FAILED( StringCchCopy(G_coInstallerVersion,
-                                              MAX_VERSION_SIZE,
-                                              argv[i]) )) {
-                        break;
-                    }
-                    G_versionSpecified = TRUE;
-
-                }
-                else{
-                    printf(USAGE);
-                    error = ERROR_INVALID_PARAMETER;
-                }
-                break;
-            case 'l':
-            case 'L':
-                G_fLoop = TRUE;
-                break;
-            default:
-                printf(USAGE);
-                error = ERROR_INVALID_PARAMETER;
-
-            }
-        }
-    }
-    return error;
-}
-
 PCHAR
 GetCoinstallerVersion(
     VOID
@@ -205,30 +144,16 @@ GetCoinstallerVersion(
     return (PCHAR)&G_coInstallerVersion;
 }
 
-VOID __cdecl
-main(
-    _In_ ULONG argc,
-    _In_reads_(argc) PCHAR argv[]
-    )
-{
-    HANDLE   hDevice;
-    DWORD    errNum = 0;
-    CHAR     driverLocation [MAX_PATH];
-    BOOL     ok;
-    HMODULE  library = NULL;
-    LONG     error;
-    PCHAR    coinstallerVersion;
+HANDLE devHandle = NULL;
+CHAR driverLocation [MAX_PATH];
+HMODULE library = NULL;
 
-    //
-    // Parse command line args
-    //   -l     -- loop option
-    //
-    if ( argc > 1 ) {// give usage if invoked with no parms
-        error = Parse(argc, argv);
-        if (error != ERROR_SUCCESS) {
-            return;
-        }
-    }
+VOID
+OpenDev()
+{
+    DWORD    errNum = 0;
+    BOOL     ok;
+    PCHAR    coinstallerVersion;
 
     if (!G_versionSpecified ) {
         coinstallerVersion = GetCoinstallerVersion();
@@ -246,7 +171,7 @@ main(
     //
     // open the device
     //
-    hDevice = CreateFile(DEVICE_NAME,
+    devHandle = CreateFile(DEVICE_NAME,
                          GENERIC_READ | GENERIC_WRITE,
                          0,
                          NULL,
@@ -254,7 +179,7 @@ main(
                          FILE_ATTRIBUTE_NORMAL,
                          NULL);
 
-    if(hDevice == INVALID_HANDLE_VALUE) {
+    if(devHandle == INVALID_HANDLE_VALUE) {
 
         errNum = GetLastError();
 
@@ -304,7 +229,7 @@ main(
             return;
         }
 
-        hDevice = CreateFile( DEVICE_NAME,
+        devHandle = CreateFile( DEVICE_NAME,
                               GENERIC_READ | GENERIC_WRITE,
                               0,
                               NULL,
@@ -312,32 +237,50 @@ main(
                               FILE_ATTRIBUTE_NORMAL,
                               NULL );
 
-        if (hDevice == INVALID_HANDLE_VALUE) {
+        if (devHandle == INVALID_HANDLE_VALUE) {
             printf ( "Error: CreatFile Failed : %d\n", GetLastError());
             return;
         }
     }
+}
 
-    DoIoctls(hDevice);
+VOID
+CloseDev()
+{
+    CloseHandle ( devHandle );
 
-    //
-    // Close the handle to the device before unloading the driver.
-    //
-    CloseHandle ( hDevice );
-
-    //
-    // Unload the driver.  Ignore any errors.
-    //
     ManageDriver( DRIVER_NAME,
                   driverLocation,
                   DRIVER_FUNC_REMOVE );
 
-    //
-    // Unload WdfCoInstaller.dll
-    //
     if ( library ) {
         UnloadWdfCoInstaller( library );
     }
+}
+
+VOID __cdecl
+main()
+{
+	OpenDev();
+    InitDev();
+
+	unsigned long long fsBaseL = ReadFSBase();
+	unsigned long long gsBaseL = ReadGSBase();
+
+	EnterU();
+	uFunc();
+
+	unsigned long long gsBaseU = ReadGSBase();
+	unsigned long long fsBaseU = ReadFSBase();
+
+
+	EnterL(gsBaseL);
+
+	printf("FL:%llx GL:%llx FU:%llx GU:%llx\n", fsBaseL, gsBaseL, fsBaseU, gsBaseU);
+
+
+	CloseDev();
+
     return;
 }
 
@@ -371,19 +314,14 @@ typedef int (*NtQuerySystemInformationFunc)(
 );
 
 
-extern ULONG64 ReadFSBase();
-extern ULONG64 WriteFSBase(ULONG64);
-extern ULONG64 ReadGSBase();
-extern ULONG64 WriteGSBase(ULONG64);
-
 VOID
-EnterL(HANDLE hDevice, ULONG64 gBase)
+EnterL(ULONG64 gBase)
 {
     BOOL bRc;
     ULONG bytesReturned;
 
 	WriteGSBase(gBase);
-    bRc = DeviceIoControl ( hDevice,
+    bRc = DeviceIoControl ( devHandle,
                             (DWORD) IOCTL_NONPNP_SET_LIBRARY_GS,
                             NULL,
                             0,
@@ -400,12 +338,12 @@ EnterL(HANDLE hDevice, ULONG64 gBase)
 }
 
 VOID
-EnterU(HANDLE hDevice)
+EnterU()
 {
     BOOL bRc;
     ULONG bytesReturned;
 
-    bRc = DeviceIoControl ( hDevice,
+    bRc = DeviceIoControl ( devHandle,
                             (DWORD) IOCTL_NONPNP_SET_PUBLIC_GS,
                             NULL,
                             0,
@@ -421,17 +359,26 @@ EnterU(HANDLE hDevice)
     }
 }
 
-
+VOID
+uFunc()
+{
+	long long i;
+	for (i = 0; i < 1000000000; i++);
+}
 
 VOID
-DoIoctls(
-    HANDLE hDevice
-    )
+InitDev()
 {
     char OutputBuffer[100];
     char InputBuffer[200];
     BOOL bRc;
     ULONG bytesReturned;
+
+	if (!devHandle)
+	{
+		printf("dev not opened!");
+		return;
+	}
 
     NtQuerySystemInformationFunc NtQuerySystemInformation = NULL;
     HMODULE hNtdll = NULL;
@@ -455,7 +402,7 @@ DoIoctls(
 	((unsigned long long*)InputBuffer)[2] = 0xfffee77770;
 
 
-    bRc = DeviceIoControl ( hDevice,
+    bRc = DeviceIoControl ( devHandle,
                             (DWORD) IOCTL_NONPNP_METHOD_PATCH_KERNEL,
                             InputBuffer,
                             24,
@@ -468,23 +415,5 @@ DoIoctls(
     if ( !bRc )
     {
         printf ( "Error in DeviceIoControl1 : : %d", GetLastError());
-        return;
     }
-
-	unsigned long long fsBaseL = ReadFSBase();
-	unsigned long long gsBaseL = ReadGSBase();
-
-	EnterU(hDevice);
-
-	long long i;
-	for (i = 0; i < 1000000000; i++);
-	unsigned long long gsBaseU = ReadGSBase();
-	unsigned long long fsBaseU = ReadFSBase();
-
-	EnterL(hDevice, gsBaseL);
-
-	printf("FL:%llx GL:%llx FU:%llx GU:%llx\n", fsBaseL, gsBaseL, fsBaseU, gsBaseU);
-
-    return;
-
 }
