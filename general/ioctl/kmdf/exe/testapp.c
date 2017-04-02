@@ -70,11 +70,6 @@ SetupDriverName(
     _In_ ULONG BufferLength
     );
 
-BOOLEAN
-DoFileReadWrite(
-    HANDLE HDevice
-    );
-
 VOID
 DoIoctls(
     HANDLE hDevice
@@ -324,18 +319,6 @@ main(
     }
 
     DoIoctls(hDevice);
-    do {
-
-        if(!DoFileReadWrite(hDevice)) {
-            break;
-        }
-
-        if(!G_fLoop) {
-            break;
-        }
-        Sleep(1000); // sleep for 1 sec.
-
-    } WHILE (TRUE);
 
     //
     // Close the handle to the device before unloading the driver.
@@ -388,10 +371,56 @@ typedef int (*NtQuerySystemInformationFunc)(
 );
 
 
-	extern unsigned long long ReadFSBase();
-	extern unsigned long long WriteFSBase(unsigned long long);
-	extern unsigned long long ReadGSBase();
-	extern unsigned long long WriteGSBase(unsigned long long);
+extern ULONG64 ReadFSBase();
+extern ULONG64 WriteFSBase(ULONG64);
+extern ULONG64 ReadGSBase();
+extern ULONG64 WriteGSBase(ULONG64);
+
+VOID
+EnterL(HANDLE hDevice, ULONG64 gBase)
+{
+    BOOL bRc;
+    ULONG bytesReturned;
+
+	WriteGSBase(gBase);
+    bRc = DeviceIoControl ( hDevice,
+                            (DWORD) IOCTL_NONPNP_SET_LIBRARY_GS,
+                            NULL,
+                            0,
+                            NULL,
+                            0,
+                            &bytesReturned,
+                            NULL
+                            );
+
+    if ( !bRc )
+    {
+        printf ( "Error in DeviceIoControl2 : %d\n", GetLastError());
+    }
+}
+
+VOID
+EnterU(HANDLE hDevice)
+{
+    BOOL bRc;
+    ULONG bytesReturned;
+
+    bRc = DeviceIoControl ( hDevice,
+                            (DWORD) IOCTL_NONPNP_SET_PUBLIC_GS,
+                            NULL,
+                            0,
+                            NULL,
+                            0,
+                            &bytesReturned,
+                            NULL
+                            );
+
+    if ( !bRc )
+    {
+        printf ( "Error in DeviceIoControl3 : %d\n", GetLastError());
+    }
+}
+
 
 
 VOID
@@ -403,8 +432,6 @@ DoIoctls(
     char InputBuffer[200];
     BOOL bRc;
     ULONG bytesReturned;
-
-
 
     NtQuerySystemInformationFunc NtQuerySystemInformation = NULL;
     HMODULE hNtdll = NULL;
@@ -419,125 +446,8 @@ DoIoctls(
     NtQuerySystemInformation(SystemModuleInformation, &ModuleInfo, sizeof(ModuleInfo), NULL);
     KernelBase = (ULONG64)ModuleInfo.Modules[0].ImageBase;
 
-
 	printf("KernelBase:%llx\n", KernelBase);
-
-    //
-    // Printing Input & Output buffer pointers and size
-    //
-
-    printf("InputBuffer Pointer = %p, BufLength = %Id\n", InputBuffer,
-                        sizeof(InputBuffer));
-    printf("OutputBuffer Pointer = %p BufLength = %Id\n", OutputBuffer,
-                                sizeof(OutputBuffer));
-    //
-    // Performing METHOD_BUFFERED
-    //
-
-    if(FAILED(StringCchCopy(InputBuffer, sizeof(InputBuffer),
-        "this String is from User Application; using METHOD_BUFFERED"))){
-        return;
-    }
-
-    printf("\nCalling DeviceIoControl METHOD_BUFFERED:\n");
-
-    memset(OutputBuffer, 0, sizeof(OutputBuffer));
-
-    bRc = DeviceIoControl ( hDevice,
-                            (DWORD) IOCTL_NONPNP_METHOD_BUFFERED,
-                            InputBuffer,
-                            (DWORD) strlen( InputBuffer )+1,
-                            OutputBuffer,
-                            sizeof( OutputBuffer),
-                            &bytesReturned,
-                            NULL
-                            );
-
-    if ( !bRc )
-    {
-        printf ( "Error in DeviceIoControl : %d", GetLastError());
-        return;
-
-    }
-    printf("    OutBuffer (%d): %s\n", bytesReturned, OutputBuffer);
-
-
-    //
-    // Performing METHOD_NIETHER
-    //
-
-    printf("\nCalling DeviceIoControl METHOD_NEITHER\n");
-
-    if(FAILED(StringCchCopy(InputBuffer, sizeof(InputBuffer),
-               "this String is from User Application; using METHOD_NEITHER"))) {
-        return;
-    }
-
-    memset(OutputBuffer, 0, sizeof(OutputBuffer));
-
-    bRc = DeviceIoControl ( hDevice,
-                            (DWORD) IOCTL_NONPNP_METHOD_NEITHER,
-                            InputBuffer,
-                            (DWORD) strlen( InputBuffer )+1,
-                            OutputBuffer,
-                            sizeof( OutputBuffer),
-                            &bytesReturned,
-                            NULL
-                            );
-
-    if ( !bRc )
-    {
-        printf ( "Error in DeviceIoControl : %d\n", GetLastError());
-        return;
-
-    }
-
-    printf("    OutBuffer (%d): %s\n", bytesReturned, OutputBuffer);
-
-    //
-    // Performing METHOD_IN_DIRECT
-    //
-
-    printf("\nCalling DeviceIoControl METHOD_IN_DIRECT\n");
-
-    if(FAILED(StringCchCopy(InputBuffer, sizeof(InputBuffer),
-               "this String is from User Application; using METHOD_IN_DIRECT"))) {
-        return;
-    }
-
-    if(FAILED(StringCchCopy(OutputBuffer, sizeof(OutputBuffer),
-               "This String is from User Application in OutBuffer; using METHOD_IN_DIRECT"))) {
-        return;
-    }
-
-    bRc = DeviceIoControl ( hDevice,
-                            (DWORD) IOCTL_NONPNP_METHOD_IN_DIRECT,
-                            InputBuffer,
-                            (DWORD) strlen( InputBuffer )+1,
-                            OutputBuffer,
-                            sizeof( OutputBuffer),
-                            &bytesReturned,
-                            NULL
-                            );
-
-    if ( !bRc )
-    {
-        printf ( "Error in DeviceIoControl : : %d", GetLastError());
-        return;
-    }
-
-    printf("    Number of bytes transfered from OutBuffer: %d\n",
-                                    bytesReturned);
-
-    //
-    // Performing METHOD_OUT_DIRECT
-    //
-
-    printf("\nCalling DeviceIoControl METHOD_OUT_DIRECT\n");
-    if(FAILED(StringCchCopy(InputBuffer, sizeof(InputBuffer),
-               "this String is from User Application; using METHOD_OUT_DIRECT"))){
-        return;
-    }
+    printf("\nCalling DeviceIoControl PATCH_KERNEL\n");
 
     memset(OutputBuffer, 0, sizeof(OutputBuffer));
 	((unsigned long long*)InputBuffer)[0] = KernelBase;
@@ -548,199 +458,33 @@ DoIoctls(
     bRc = DeviceIoControl ( hDevice,
                             (DWORD) IOCTL_NONPNP_METHOD_PATCH_KERNEL,
                             InputBuffer,
-                            24/*(DWORD) strlen( InputBuffer )+1*/,
+                            24,
                             OutputBuffer,
                             sizeof( OutputBuffer),
                             &bytesReturned,
                             NULL
                             );
 
-    //printf("    OutBuffer (%d): %llx\n", bytesReturned, *(unsigned long long*)OutputBuffer);
     if ( !bRc )
     {
-        printf ( "Error in DeviceIoControl : : %d", GetLastError());
+        printf ( "Error in DeviceIoControl1 : : %d", GetLastError());
         return;
     }
 
-	unsigned long long fs_base = ReadFSBase();
-	unsigned long long gs_base = ReadGSBase();
+	unsigned long long fsBaseL = ReadFSBase();
+	unsigned long long gsBaseL = ReadGSBase();
 
-    bRc = DeviceIoControl ( hDevice,
-                            (DWORD) IOCTL_NONPNP_SET_PUBLIC_GS,
-                            InputBuffer,
-                            (DWORD) strlen( InputBuffer )+1,
-                            OutputBuffer,
-                            sizeof( OutputBuffer),
-                            &bytesReturned,
-                            NULL
-                            );
+	EnterU(hDevice);
 
- /*   if ( !bRc )
-    {
-        printf ( "Error in DeviceIoControl : %d\n", GetLastError());
-        return;
+	long long i;
+	for (i = 0; i < 1000000000; i++);
+	unsigned long long gsBaseU = ReadGSBase();
+	unsigned long long fsBaseU = ReadFSBase();
 
-    }*/
+	EnterL(hDevice, gsBaseL);
 
-
-
-
-	//WriteFSBase(fs_base+8);
-	//Sleep(2);
-	//long long i;
-	//for (i = 0; i < 1000000000; i++);
-	unsigned long long gs_base1 = ReadGSBase();
-	WriteGSBase(gs_base);
-	//
-    bRc = DeviceIoControl ( hDevice,
-                            (DWORD) IOCTL_NONPNP_SET_LIBRARY_GS,
-                            InputBuffer,
-                            (DWORD) strlen( InputBuffer )+1,
-                            OutputBuffer,
-                            sizeof( OutputBuffer),
-                            &bytesReturned,
-                            NULL
-                            );
-
-    /*if ( !bRc )
-    {
-        printf ( "Error in DeviceIoControl : %d\n", GetLastError());
-        return;
-
-    }*/
-
-	printf("FS_BASE:%llx old:%llx gs_base:%llx gs_base1:%llx\n", ReadFSBase(), fs_base, gs_base, gs_base1);
+	printf("FL:%llx GL:%llx FU:%llx GU:%llx\n", fsBaseL, gsBaseL, fsBaseU, gsBaseU);
 
     return;
 
 }
-
-
-BOOLEAN
-DoFileReadWrite(
-    HANDLE HDevice
-    )
-{
-    ULONG bufLength, index;
-    PUCHAR readBuf = NULL;
-    PUCHAR writeBuf = NULL;
-    BOOLEAN ret;
-    ULONG   bytesWritten, bytesRead;
-
-    //
-    // Seed the random-number generator with current time so that
-    // the numbers will be different every time we run.
-    //
-    srand( (unsigned)time( NULL ) );
-
-    //
-    // rand function returns a pseudorandom integer in the range 0 to RAND_MAX
-    // (0x7fff)
-    //
-    bufLength = rand();
-    //
-    // Try until the bufLength is not zero.
-    //
-    while(bufLength == 0) {
-        bufLength = rand();
-    }
-
-    //
-    // Allocate a buffer of that size to use for write operation.
-    //
-    writeBuf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, bufLength);
-    if(!writeBuf) {
-        ret = FALSE;
-        goto End;
-    }
-    //
-    // Fill the buffer with randon number less than UCHAR_MAX.
-    //
-    index = bufLength;
-    while(index){
-        writeBuf[index-1] = (UCHAR) rand() % UCHAR_MAX;
-        index--;
-    }
-
-    printf("Write %d bytes to file\n", bufLength);
-
-    //
-    // Tell the driver to write the buffer content to the file from the
-    // begining of the file.
-    //
-
-    if (!WriteFile(HDevice,
-                  writeBuf,
-                  bufLength,
-                  &bytesWritten,
-                  NULL)) {
-
-        printf("ReadFile failed with error 0x%x\n", GetLastError());
-
-        ret = FALSE;
-        goto End;
-
-    }
-
-    //
-    // Allocate another buffer of same size.
-    //
-    readBuf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, bufLength);
-    if(!readBuf) {
-
-        ret = FALSE;
-        goto End;
-    }
-
-    printf("Read %d bytes from the same file\n", bufLength);
-
-    //
-    // Tell the driver to read the file from the begining.
-    //
-    if (!ReadFile(HDevice,
-                  readBuf,
-                  bufLength,
-                  &bytesRead,
-                  NULL)) {
-
-        printf("Error: ReadFile failed with error 0x%x\n", GetLastError());
-
-        ret = FALSE;
-        goto End;
-
-    }
-
-    //
-    // Now compare the readBuf and writeBuf content. They should be the same.
-    //
-
-    if(bytesRead != bytesWritten) {
-        printf("bytesRead(%d) != bytesWritten(%d)\n", bytesRead, bytesWritten);
-        ret = FALSE;
-        goto End;
-    }
-
-    if(memcmp(readBuf, writeBuf, bufLength) != 0){
-        printf("Error: ReadBuf and WriteBuf contents are not the same\n");
-        ret = FALSE;
-        goto End;
-    }
-
-    ret = TRUE;
-
-End:
-
-    if(readBuf){
-        HeapFree (GetProcessHeap(), 0, readBuf);
-    }
-
-    if(writeBuf){
-        HeapFree (GetProcessHeap(), 0, writeBuf);
-    }
-
-    return ret;
-
-
-}
-
-

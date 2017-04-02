@@ -971,18 +971,18 @@ Return Value:
 --*/
 {
     NTSTATUS            status = STATUS_SUCCESS;// Assume success
-    PCHAR               inBuf = NULL, outBuf = NULL; // pointer to Input and output buffer
+    PCHAR               inBuf = NULL; // pointer to Input and output buffer
     PCHAR               data = "blah String is from Device Driver !!!";
     ULONG               datalen = (ULONG) strlen(data)+1;//Length of data including null
     PCHAR               buffer = NULL;
-    PREQUEST_CONTEXT    reqContext = NULL;
     size_t               bufSize;
 
     UNREFERENCED_PARAMETER( Queue );
 
     PAGED_CODE();
 
-    if(!OutputBufferLength || !InputBufferLength)
+    if(IoControlCode == IOCTL_NONPNP_METHOD_PATCH_KERNEL &&
+	   (!OutputBufferLength || !InputBufferLength))
     {
         WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
         return;
@@ -994,124 +994,6 @@ Return Value:
 
     switch (IoControlCode)
     {
-    case IOCTL_NONPNP_METHOD_BUFFERED:
-
-
-        TraceEvents(TRACE_LEVEL_VERBOSE, DBG_IOCTL, "Called IOCTL_NONPNP_METHOD_BUFFERED\n");
-
-        //
-        // For bufffered ioctls WdfRequestRetrieveInputBuffer &
-        // WdfRequestRetrieveOutputBuffer return the same buffer
-        // pointer (Irp->AssociatedIrp.SystemBuffer), so read the
-        // content of the buffer before writing to it.
-        //
-        status = WdfRequestRetrieveInputBuffer(Request, 0, &inBuf, &bufSize);
-        if(!NT_SUCCESS(status)) {
-            status = STATUS_INSUFFICIENT_RESOURCES;
-            break;
-        }
-
-        ASSERT(bufSize == InputBufferLength);
-
-        //
-        // Read the input buffer content.
-        // We are using the following function to print characters instead
-        // TraceEvents with %s format because the string we get may or
-        // may not be null terminated. The buffer may contain non-printable
-        // characters also.
-        //
-        Hexdump((TRACE_LEVEL_VERBOSE,  DBG_IOCTL, "Data from User : %!HEXDUMP!\n",
-                        log_xstr(inBuf, (USHORT)InputBufferLength)));
-        PrintChars(inBuf, InputBufferLength  );
-
-
-        status = WdfRequestRetrieveOutputBuffer(Request, 0, &outBuf, &bufSize);
-        if(!NT_SUCCESS(status)) {
-            status = STATUS_INSUFFICIENT_RESOURCES;
-            break;
-        }
-
-        ASSERT(bufSize == OutputBufferLength);
-
-        //
-        // Writing to the buffer over-writes the input buffer content
-        //
-
-        RtlCopyMemory(outBuf, data, OutputBufferLength);
-
-        Hexdump((TRACE_LEVEL_VERBOSE,  DBG_IOCTL, "Data to User : %!HEXDUMP!\n",
-                        log_xstr(outBuf, (USHORT)datalen)));
-        PrintChars(outBuf, datalen  );
-
-        //
-        // Assign the length of the data copied to IoStatus.Information
-        // of the request and complete the request.
-        //
-        WdfRequestSetInformation(Request,
-                OutputBufferLength < datalen? OutputBufferLength:datalen);
-
-        //
-        // When the request is completed the content of the SystemBuffer
-        // is copied to the User output buffer and the SystemBuffer is
-        // is freed.
-        //
-
-       break;
-
-
-    case IOCTL_NONPNP_METHOD_IN_DIRECT:
-
-
-        TraceEvents(TRACE_LEVEL_VERBOSE, DBG_IOCTL, "Called IOCTL_NONPNP_METHOD_IN_DIRECT\n");
-
-        //
-        // Get the Input buffer. WdfRequestRetrieveInputBuffer returns
-        // Irp->AssociatedIrp.SystemBuffer.
-        //
-        status = WdfRequestRetrieveInputBuffer(Request, 0, &inBuf, &bufSize);
-        if(!NT_SUCCESS(status)) {
-            status = STATUS_INSUFFICIENT_RESOURCES;
-            break;
-        }
-
-        ASSERT(bufSize == InputBufferLength);
-
-        Hexdump((TRACE_LEVEL_VERBOSE,  DBG_IOCTL, "Data from User : %!HEXDUMP!\n",
-                        log_xstr(inBuf, (USHORT)InputBufferLength)));
-        PrintChars(inBuf, InputBufferLength);
-
-        //
-        // Get the output buffer. Framework calls MmGetSystemAddressForMdlSafe
-        // on the Irp->MdlAddress and returns the system address.
-        // Oddity: For this method, this buffer is intended for transfering data
-        // from the application to the driver.
-        //
-
-        status = WdfRequestRetrieveOutputBuffer(Request, 0, &buffer, &bufSize);
-        if(!NT_SUCCESS(status)) {
-            break;
-        }
-
-        ASSERT(bufSize == OutputBufferLength);
-
-        Hexdump((TRACE_LEVEL_VERBOSE,  DBG_IOCTL, "Data from User in OutputBuffer: %!HEXDUMP!\n",
-                        log_xstr(buffer, (USHORT)OutputBufferLength)));
-        PrintChars(buffer, OutputBufferLength);
-
-        //
-        // Return total bytes read from the output buffer.
-        // Note OutputBufferLength = MmGetMdlByteCount(Irp->MdlAddress)
-        //
-
-        WdfRequestSetInformation(Request, OutputBufferLength);
-
-        //
-        // NOTE: Changes made to the  SystemBuffer are not copied
-        // to the user input buffer by the I/O manager
-        //
-
-      break;
-
     case IOCTL_NONPNP_METHOD_PATCH_KERNEL:
 
 
@@ -1184,57 +1066,6 @@ Return Value:
 
         break;
 
-    case IOCTL_NONPNP_METHOD_NEITHER:
-        {
-            size_t inBufLength, outBufLength;
-
-            //
-            // The NonPnpEvtDeviceIoInCallerContext has already probe and locked the
-            // pages and mapped the user buffer into system address space and
-            // stored memory buffer pointers in the request context. We can get the
-            // buffer pointer by calling WdfMemoryGetBuffer.
-            //
-            TraceEvents(TRACE_LEVEL_VERBOSE, DBG_IOCTL, "Called IOCTL_NONPNP_METHOD_NEITHER\n");
-
-            reqContext = GetRequestContext(Request);
-
-            inBuf = WdfMemoryGetBuffer(reqContext->InputMemoryBuffer, &inBufLength);
-            outBuf = WdfMemoryGetBuffer(reqContext->OutputMemoryBuffer, &outBufLength);
-
-            if(inBuf == NULL || outBuf == NULL) {
-                status = STATUS_INVALID_PARAMETER;
-            }
-
-            ASSERT(inBufLength == InputBufferLength);
-            ASSERT(outBufLength == OutputBufferLength);
-
-            //
-            // Now you can safely read the data from the buffer in any arbitrary
-            // context.
-            //
-            Hexdump((TRACE_LEVEL_VERBOSE,  DBG_IOCTL, "Data from User : %!HEXDUMP!\n",
-                            log_xstr(inBuf, (USHORT)inBufLength)));
-            PrintChars(inBuf, inBufLength);
-
-            //
-            // Write to the buffer in any arbitrary context.
-            //
-            RtlCopyMemory(outBuf, data, outBufLength);
-
-            Hexdump((TRACE_LEVEL_VERBOSE,  DBG_IOCTL, "Data to User : %!HEXDUMP!\n",
-                            log_xstr(outBuf, (USHORT)datalen)));
-            PrintChars(outBuf, datalen);
-
-            //
-            // Assign the length of the data copied to IoStatus.Information
-            // of the Irp and complete the Irp.
-            //
-            WdfRequestSetInformation(Request,
-                    outBufLength < datalen? outBufLength:datalen);
-
-
-            break;
-        }
     case IOCTL_NONPNP_SET_PUBLIC_GS:
         {
 			SetAppThread();
