@@ -23,6 +23,10 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="install.c" />
+    <ClCompile Include="testapp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="install.c" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="fastrpc.asm">
