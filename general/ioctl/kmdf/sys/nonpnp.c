@@ -794,13 +794,13 @@ void PatchPico()
 	}
 
 	_HandleIRET = (unsigned long long)ptr;
-	_HandleIRETGS = (unsigned long long)ptr + 100;
-	_HandleSYSRET = (unsigned long long)ptr + 200;
+	_HandleIRETGS = (unsigned long long)ptr + 200;
+	_HandleSYSRET = (unsigned long long)ptr + 400;
 
 	src = (unsigned long long*)(unsigned long long)HandleIRET;
 	dst = (unsigned long long*)_HandleIRET;
 
-	for (i = 0; i < 100/8; i++)
+	for (i = 0; i < 200/8; i++)
 	{
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
@@ -810,24 +810,24 @@ void PatchPico()
 	dst = (unsigned long long*)_HandleIRETGS;
 
 
-	for (i = 0; i < 100/8; i++)
+	for (i = 0; i < 200/8; i++)
 	{
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
-	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 2);
+	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 22+ 2);
 	*src1 = fsBaseAddr;
 
 	src = (unsigned long long*)(unsigned long long)HandleSYSRET;
 	dst = (unsigned long long*)_HandleSYSRET;
 
 
-	for (i = 0; i < 100/8; i++)
+	for (i = 0; i < 200/8; i++)
 	{
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
-	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 2);
+	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 23 + 2);
 	*src1 = fsBaseAddr;
 }
 
