@@ -63,6 +63,30 @@ extern void ResetAppThread();
 #pragma alloc_text( PAGE, FileEvtIoDeviceControl)
 #endif // ALLOC_PRAGMA
 
+#define PACKED
+#pragma pack(push,1)
+
+struct IDT_ENTRY {
+    unsigned short low;
+    unsigned unused1;
+    unsigned short middle;
+    unsigned high;
+    unsigned unused2;
+} PACKED;
+
+#pragma pack(pop)
+#undef PACKED
+
+void* ReadIDT(unsigned char *var);
+
+static unsigned long long
+ReadIDTEntry(struct IDT_ENTRY *idt, int i)
+{
+	return idt[i].low +
+         (((unsigned long long)idt[i].middle) << 16) +
+         (((unsigned long long)idt[i].high) << 32);
+
+}
 
 NTSTATUS
 DriverEntry(
@@ -816,10 +840,10 @@ void PatchPico()
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
-	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 25 + 2);
+	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 26 + 2);
 	*src1 = fsBaseAddr;
 
-	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 25 + 2 + 15);
+	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 26 + 2 + 15);
 	*src1 = gsBaseAddr;
 
 	src = (unsigned long long*)(unsigned long long)HandleSYSRET;
@@ -831,9 +855,9 @@ void PatchPico()
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
-	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 26 + 2);
+	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 29 + 2);
 	*src1 = fsBaseAddr;
-	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 26 + 2 + 15);
+	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 29 + 2 + 15);
 	*src1 = gsBaseAddr;
 }
 
@@ -976,9 +1000,12 @@ Return Value:
 {
     NTSTATUS            status = STATUS_SUCCESS;// Assume success
     PCHAR               inBuf = NULL; // pointer to Input and output buffer
-    //PCHAR               outBuf = NULL; // pointer to Input and output buffer
+    PCHAR               outBuf = NULL; // pointer to Input and output buffer
 	size_t bufSize = 0;
-	//unsigned long long tid = (unsigned long long)PsGetCurrentThreadId();
+	unsigned char var[16];
+	void *idt = ReadIDT(var);
+	unsigned long long idtval;
+	int i;
 
     UNREFERENCED_PARAMETER( Queue );
     UNREFERENCED_PARAMETER( OutputBufferLength );
@@ -998,6 +1025,7 @@ Return Value:
 
     switch (IoControlCode)
     {
+
     case IOCTL_NONPNP_METHOD_PATCH_KERNEL:
 
 
@@ -1060,6 +1088,31 @@ Return Value:
 			ResetAppThread();
 			break;
 		}
+
+	case IOCTL_NONPNP_READ_IDT:
+        status = WdfRequestRetrieveOutputBuffer(Request, 0, &outBuf, &bufSize);
+        if(!NT_SUCCESS(status)) {
+            break;
+        }
+
+        ASSERT(bufSize == OutputBufferLength);
+		if (bufSize < 256 * 8)
+		{
+            status = STATUS_INSUFFICIENT_RESOURCES;
+			break;
+		}
+
+        //
+        // Write data to be sent to the user in this buffer
+        //
+		for (i = 0; i < 256; i++)
+		{
+			idtval = ReadIDTEntry(idt, i);
+        	RtlCopyMemory(&((unsigned long long*)outBuf)[i], (PCHAR)&idtval, 8);
+		}
+        WdfRequestSetInformation(Request, OutputBufferLength);
+		break;
+
 
     default:
 

@@ -20,4 +20,9 @@ rdgsbase rax
 ret
 ReadGSBase ENDP
 
+ExecuteNop PROC EXPORT
+nop
+ret
+ExecuteNop ENDP
+
 END

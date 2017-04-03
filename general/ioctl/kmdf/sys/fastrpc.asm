@@ -8,14 +8,14 @@ XchgVal ENDP
 
 SetAppThread PROC EXPORT
 mov rax, gs:[0188h]
-mov dword ptr [rax+0996h], 1234h
+mov byte ptr [rax+07fh], 0aah
 ret
 SetAppThread ENDP
 
 
 ResetAppThread PROC EXPORT
 mov rax, gs:[0188h]
-mov dword ptr [rax+0996h], 1235h
+mov byte ptr [rax+07fh], 0
 ret
 ResetAppThread ENDP
 
@@ -27,12 +27,14 @@ HandleIRETGS PROC EXPORT
 ; accordingly.
 
 mov rax, gs:[0188h]
-mov eax, [rax+0996h]
+cmp rax, 07fffffffh
+jb next
 
 swapgs
 
-cmp eax, 1234h
+cmp byte ptr[rax+07fh], 0aah
 jne next
+
 mov rax, 0FF99977770h
 wrfsbase rax
 mov rax, 0FF99977770h
@@ -72,24 +74,34 @@ HandleSYSRET PROC EXPORT
 ; please change the PatchPico
 ; accordingly.
 
-mov rbp, gs:[0188h]
-mov ebp, [rbp+0996h]
+mov rbp, rax
+mov rax, gs:[0188h]
 
 swapgs
 
-cmp ebp, 1234h
+cmp rax, 07fffffffh
+jb next
+
+cmp byte ptr[rax+07fh], 0aah
 jne next
 
-mov rbp, 0FF99977770h
-wrfsbase  rbp
-mov rbp, 0FF99977770h
-wrgsbase  rbp
+mov rax, 0FF99977770h
+wrfsbase rax
+mov rax, 0FF99977770h
+wrgsbase rax
 
 next:
+mov rax, rbp
 mov rbp,r9
 mov rsp,r8
 
 sysretq
 HandleSYSRET ENDP
+
+ReadIDT PROC EXPORT
+sidt [rcx]
+mov rax, [rcx+2]
+ret
+ReadIDT ENDP
 
 END

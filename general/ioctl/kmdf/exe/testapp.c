@@ -45,17 +45,11 @@ _Analysis_mode_(_Analysis_code_type_user_code_)
 #include <limits.h>
 #include <strsafe.h>
 #include "public.h"
+#define TESTAPP_C
+#include "testapp.h"
+#undef TESTAPP_C
 
-
-VOID InitDev();
-VOID uFunc();
-VOID EnterU();
-VOID EnterL();
-extern ULONG64 ReadFSBase();
-extern ULONG64 WriteFSBase(ULONG64);
-extern ULONG64 ReadGSBase();
-extern ULONG64 WriteGSBase(ULONG64);
-
+VOID ReadIDT();
 
 BOOLEAN
 ManageDriver(
@@ -258,11 +252,27 @@ CloseDev()
     }
 }
 
-/*
+extern void ExecuteNop();
+
+void uFunc()
+{
+	long long i;
+	for (i = 0; i < 1000000000; i++)
+		ExecuteNop();
+}
+
+
 VOID __cdecl
 main()
 {
 	OpenDev();
+
+	/*ReadIDT();
+
+	CloseDev();
+*/
+//#if 0
+
     InitDev();
 
 	unsigned long long fsBaseL = ReadFSBase();
@@ -280,11 +290,12 @@ main()
 	printf("FL:%llx GL:%llx FU:%llx GU:%llx\n", fsBaseL, gsBaseL, fsBaseU, gsBaseU);
 
 
-	CloseDev();
+	//CloseDev();
 
     return;
+//#endif
 }
-*/
+
 
 enum { SystemModuleInformation = 11 };
 
@@ -360,11 +371,64 @@ EnterU()
 }
 
 VOID
-uFunc()
+ReadIDT()
 {
-	long long i;
-	for (i = 0; i < 1000000000; i++);
+    unsigned long long OutputBuffer[256];
+    char InputBuffer[200];
+    BOOL bRc;
+    ULONG bytesReturned;
+
+	int i;
+
+	if (!devHandle)
+	{
+		printf("dev not opened!");
+		return;
+	}
+
+    NtQuerySystemInformationFunc NtQuerySystemInformation = NULL;
+    HMODULE hNtdll = NULL;
+    ULONG64 KernelBase = 0;
+    RTL_PROCESS_MODULES ModuleInfo = { 0 };
+
+    // Get the address of NtQuerySystemInformation
+    hNtdll = GetModuleHandle("ntdll");
+    NtQuerySystemInformation = (NtQuerySystemInformationFunc)GetProcAddress(hNtdll, "NtQuerySystemInformation");
+
+    // Get the base address of the kernel
+    NtQuerySystemInformation(SystemModuleInformation, &ModuleInfo, sizeof(ModuleInfo), NULL);
+    KernelBase = (ULONG64)ModuleInfo.Modules[0].ImageBase;
+
+	printf("KernelBase:%llx\n", KernelBase);
+    printf("\nCalling DeviceIoControl PATCH_KERNEL\n");
+
+    memset(OutputBuffer, 0, sizeof(OutputBuffer));
+	((unsigned long long*)InputBuffer)[0] = KernelBase;
+	((unsigned long long*)InputBuffer)[1] = 0xfffaa77770;
+	((unsigned long long*)InputBuffer)[2] = 0xfffee77770;
+
+
+    bRc = DeviceIoControl ( devHandle,
+                            (DWORD) IOCTL_NONPNP_READ_IDT,
+                            InputBuffer,
+                            24,
+                            OutputBuffer,
+                            sizeof( OutputBuffer),
+                            &bytesReturned,
+                            NULL
+                            );
+
+    if ( !bRc )
+    {
+        printf ( "Error in DeviceIoControl1 : : %d", GetLastError());
+    }
+	for (i = 0; i < 256; i++)
+	{
+		printf("%d # %llx\n", i, OutputBuffer[i] - KernelBase);
+	}
 }
+
+
 
 VOID
 InitDev()
@@ -417,7 +481,7 @@ InitDev()
         printf ( "Error in DeviceIoControl1 : : %d", GetLastError());
     }
 }
-
+/*
 BOOL WINAPI DllMain(
 	HINSTANCE hinstDLL,  // handle to DLL module
 	DWORD fdwReason,     // reason for calling function
@@ -447,3 +511,4 @@ BOOL WINAPI DllMain(
 	}
 	return TRUE;  // Successful DLL_PROCESS_ATTACH.
 }
+*/

@@ -27,10 +27,19 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="install.c" />
+    <ClCompile Include="testapp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="install.c" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="fastrpc.asm">
       <Filter>Source Files</Filter>
     </MASM>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="*.h;*.hpp;*.hxx;*.hm;*.inl;*.xsd">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
