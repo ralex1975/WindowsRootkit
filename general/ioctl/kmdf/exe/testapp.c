@@ -290,7 +290,7 @@ main()
 	printf("FL:%llx GL:%llx FU:%llx GU:%llx\n", fsBaseL, gsBaseL, fsBaseU, gsBaseU);
 
 
-	//CloseDev();
+	CloseDev();
 
     return;
 //#endif

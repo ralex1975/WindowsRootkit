@@ -933,6 +933,7 @@ PatchKernel()
 	}
 
 
+//#if 0
 	for (i = 0; i < sizeof(intr_funcs)/8; i++)
 	{
 		target = (unsigned char*)(kernelBaseAddr + (intr_funcs[i] - 0x140000000));
@@ -945,7 +946,7 @@ PatchKernel()
 			unsigned long long newval;
 			*(long*)&val[1] = (long)diff;
 			val[5] = 0xeb;
-			val[6] = 1;
+			val[6] = 5;
 			newval = *(unsigned long long*)val;
 			//*(unsigned long long*)target = *(unsigned long long*)val;
 			XchgVal((unsigned long long*)target, newval);
@@ -956,7 +957,7 @@ PatchKernel()
 			//return 0;
 		}
 	}
-
+//#endif
 	return 1;
 }
 
@@ -991,6 +992,12 @@ UnpatchKernel()
 		target = (unsigned char*)(kernelBaseAddr + (sysret_funcs[i] - 0x140000000));
 		XchgVal((unsigned long long*)target, 0x10fe08b49e98b49);
 	}
+
+	/*for (i = 0; i < sizeof(intr_funcs)/8; i++)
+	{
+		target = (unsigned char*)(kernelBaseAddr + (sysret_funcs[i] - 0x140000000));
+		XchgVal((unsigned long long*)target, 0x10fe08b49e98b49);
+	}*/
 }
 
 

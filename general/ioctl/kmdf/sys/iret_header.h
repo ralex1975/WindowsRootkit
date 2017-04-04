@@ -65,13 +65,15 @@ unsigned long long intr_funcs[] = {
 	0x140154AC2ULL,
 	0x140154BC2ULL,
 	0x140154CC1ULL,
-	0x140154E00ULL,
-	0x140154E64ULL,
-	0x1401550C0ULL
+	0x140154E64ULL
 };
 
 unsigned long long sysret_funcs[] = {
 	0x14014D470ULL,
 	0x14015555EULL,
 	0x140155F21ULL
+};
+unsigned long long syscall_funcs[] = {
+	0x140154E00ULL,
+	0x1401550C0ULL
 };

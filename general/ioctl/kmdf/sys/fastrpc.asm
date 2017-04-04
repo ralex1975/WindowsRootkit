@@ -134,6 +134,16 @@ mov [r10+432], rax
 next:
 pop rax
 ret
+call ReadIDT
+jmp prev
+nop
+nop
+nop
+nop
+nop
+prev:
+ret
+
 HandleINTR ENDP
 
 END
