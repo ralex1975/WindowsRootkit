@@ -120,6 +120,7 @@ ReadIDT ENDP
 
 HandleINTR PROC EXPORT
 push rax
+push rcx
 rdgsbase rax
 swapgs
 mov r10, qword ptr gs:[188h]
@@ -127,11 +128,19 @@ mov r10, qword ptr gs:[188h]
 cmp r10, 07fffffffh
 jb next
 
-mov [r10+424], rax
+cmp byte ptr[r10+07fh], 0aah
+jne next
+
+mov rcx, [r10+96]
+cmp rcx, 07fffffffh
+jb next
+
+mov [rcx+424], rax
 rdfsbase rax
-mov [r10+432], rax
+mov [rcx+432], rax
 
 next:
+pop rcx
 pop rax
 ret
 HandleINTR ENDP
@@ -144,6 +153,10 @@ swapgs
 
 mov r10, qword ptr gs:[188h]
 
+cmp r10, 07fffffffh
+jb next
+
+mov r10, [r10+96]
 cmp r10, 07fffffffh
 jb next
 

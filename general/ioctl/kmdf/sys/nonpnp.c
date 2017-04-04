@@ -894,7 +894,7 @@ PatchKernel()
 	PatchFunc(iret_funcs, sizeof(iret_funcs)/8, (UCHAR*)_HandleIRETGS, &_HandleIRETGS_val, 0xe9);
 	PatchFunc(sysret_funcs, sizeof(sysret_funcs)/8, (UCHAR*)_HandleSYSRET, &_HandleSYSRET_val, 0xe9);
 	PatchFunc(intr_funcs, sizeof(intr_funcs)/8, (UCHAR*)_HandleINTR, &_HandleINTR_val, 0xe8);
-	//PatchFunc(syscall_funcs, sizeof(syscall_funcs)/8, (UCHAR*)_HandleSYSCALL, &_HandleSYSCALL_val);
+	//PatchFunc(syscall_funcs, sizeof(syscall_funcs)/8, (UCHAR*)_HandleSYSCALL, &_HandleSYSCALL_val, 0xe8);
 	return 1;
 }
 
@@ -914,10 +914,10 @@ UnpatchFunc(UINT64 *func_arr, int len, unsigned long long val)
 void
 UnpatchKernel()
 {
-	/*UnpatchFunc(iret_funcs, sizeof(iret_funcs)/8, _HandleIRETGS_val);
+	UnpatchFunc(iret_funcs, sizeof(iret_funcs)/8, _HandleIRETGS_val);
 	UnpatchFunc(sysret_funcs, sizeof(sysret_funcs)/8, _HandleSYSRET_val);
 	UnpatchFunc(intr_funcs, sizeof(intr_funcs)/8, _HandleINTR_val);
-	UnpatchFunc(syscall_funcs, sizeof(syscall_funcs)/8, _HandleSYSCALL_val);*/
+	//UnpatchFunc(syscall_funcs, sizeof(syscall_funcs)/8, _HandleSYSCALL_val);
 }
 
 VOID
