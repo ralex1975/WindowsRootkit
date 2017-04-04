@@ -19,6 +19,14 @@ mov byte ptr [rax+07fh], 0
 ret
 ResetAppThread ENDP
 
+SetFsGsBase PROC EXPORT
+mov rax, gs:[0188h]
+mov rax, [rax+96]
+mov [rax+424], rcx
+mov [rax+432], rdx
+ret
+SetFsGsBase ENDP
+
 
 HandleIRETGS PROC EXPORT
 
@@ -35,10 +43,11 @@ swapgs
 cmp byte ptr[rax+07fh], 0aah
 jne next
 
-mov rax, 0FF99977770h
-wrfsbase rax
-mov rax, 0FF99977770h
-wrgsbase rax
+mov rax, [rax+96]
+mov rcx, [rax+424]
+wrfsbase rcx
+mov rcx, [rax+432]
+wrgsbase rcx
 
 next:
 mov r9, [rbp-30h]
@@ -85,10 +94,15 @@ jb next
 cmp byte ptr[rax+07fh], 0aah
 jne next
 
-mov rax, 0FF99977770h
-wrfsbase rax
-mov rax, 0FF99977770h
-wrgsbase rax
+push rcx
+
+mov rax, [rax+96]
+mov rcx, [rax+424]
+wrfsbase rcx
+mov rcx, [rax+432]
+wrgsbase rcx
+
+pop rcx
 
 next:
 mov rax, rbp

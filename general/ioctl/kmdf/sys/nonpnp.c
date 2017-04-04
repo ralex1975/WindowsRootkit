@@ -796,6 +796,7 @@ Return Value:
 extern void HandleIRET();
 extern void HandleSYSRET();
 extern void HandleIRETGS();
+extern void SetFsGsBase(unsigned long long, unsigned long long);
 unsigned long long kernelBaseAddr = 0;
 unsigned long long fsBaseAddr = 0;
 unsigned long long gsBaseAddr = 0;
@@ -810,7 +811,7 @@ extern void XchgVal(unsigned long long *ptr, unsigned long long a);
 void PatchPico()
 {
 	unsigned char* ptr = (unsigned char*)(kernelBaseAddr + (0x14067BBB9 - 0x140000000));
-	unsigned long long *src, *dst, *src1;
+	unsigned long long *src, *dst;
 	int i;
 
 	if (already_patched || !kernelBaseAddr)
@@ -840,11 +841,6 @@ void PatchPico()
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
-	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 26 + 2);
-	*src1 = fsBaseAddr;
-
-	src1 = (unsigned long long*)((unsigned long long)_HandleIRETGS + 26 + 2 + 15);
-	*src1 = gsBaseAddr;
 
 	src = (unsigned long long*)(unsigned long long)HandleSYSRET;
 	dst = (unsigned long long*)_HandleSYSRET;
@@ -855,10 +851,7 @@ void PatchPico()
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
-	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 29 + 2);
-	*src1 = fsBaseAddr;
-	src1 = (unsigned long long*)((unsigned long long)_HandleSYSRET + 29 + 2 + 15);
-	*src1 = gsBaseAddr;
+	SetFsGsBase(fsBaseAddr, gsBaseAddr);
 }
 
 
