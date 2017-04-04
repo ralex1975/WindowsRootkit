@@ -278,14 +278,20 @@ main()
 	unsigned long long fsBaseL = ReadFSBase();
 	unsigned long long gsBaseL = ReadGSBase();
 
-	EnterU();
+	//WriteFSBase(102345);
+	//WriteGSBase(102345);
+
+	//EnterU();
 	uFunc();
 
 	unsigned long long gsBaseU = ReadGSBase();
 	unsigned long long fsBaseU = ReadFSBase();
 
+	WriteFSBase(fsBaseL);
+	WriteGSBase(gsBaseL);
 
-	EnterL(gsBaseL);
+	//EnterL(gsBaseL);
+	
 
 	printf("FL:%llx GL:%llx FU:%llx GU:%llx\n", fsBaseL, gsBaseL, fsBaseU, gsBaseU);
 

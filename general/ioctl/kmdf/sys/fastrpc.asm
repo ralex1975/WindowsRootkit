@@ -63,20 +63,6 @@ iretq
 
 HandleIRETGS ENDP
 
-
-HandleIRET PROC EXPORT
-mov r10, [rbp-28h]
-mov r9, [rbp-30h]
-mov r8, [rbp-38h]
-mov rdx, [rbp-40h]
-mov rcx, [rbp-48h]
-mov rax, [rbp-50h]
-mov rsp, rbp
-mov rbp, [rbp+0D8h]
-add rsp, 0E8h
-iretq
-HandleIRET ENDP
-
 HandleSYSRET PROC EXPORT
 
 ; If you change anything here

@@ -846,7 +846,7 @@ void PatchPico()
 	PatchPicoHelper((UINT64*)(UINT64)HandleSYSRET, (UINT64*)_HandleSYSRET);
 	PatchPicoHelper((UINT64*)(UINT64)HandleINTR, (UINT64*)_HandleINTR);
 	PatchPicoHelper((UINT64*)(UINT64)HandleSYSCALL, (UINT64*)_HandleSYSCALL);
-	SetFsGsBase(fsBaseAddr, gsBaseAddr);
+	//SetFsGsBase(fsBaseAddr, gsBaseAddr);
 }
 
 
@@ -1022,13 +1022,14 @@ Return Value:
             status = STATUS_INSUFFICIENT_RESOURCES;
             break;
 		}
+		SetAppThread();
         WdfRequestSetInformation(Request, OutputBufferLength);
 
         break;
 
     case IOCTL_NONPNP_SET_PUBLIC_GS:
         {
-			SetAppThread();
+			//SetAppThread();
 			break;
 		}
 
@@ -1041,7 +1042,7 @@ Return Value:
         	}
         	ASSERT(bufSize == InputBufferLength);*/
 
-			ResetAppThread();
+			//ResetAppThread();
 			break;
 		}
 
