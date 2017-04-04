@@ -134,16 +134,31 @@ mov [r10+432], rax
 next:
 pop rax
 ret
-call ReadIDT
-jmp prev
-nop
-nop
-nop
-nop
-nop
-prev:
-ret
-
 HandleINTR ENDP
+
+HandleSYSCALL PROC EXPORT
+push rax
+push r10
+rdgsbase rax
+swapgs
+
+mov r10, qword ptr gs:[188h]
+
+cmp r10, 07fffffffh
+jb next
+
+mov [r10+424], rax
+rdfsbase rax
+mov [r10+432], rax
+
+next:
+pop r10
+pop rax
+
+add rsp, 8
+mov qword ptr gs:[10h], rsp
+sub rsp, 8
+ret
+HandleSYSCALL ENDP
 
 END

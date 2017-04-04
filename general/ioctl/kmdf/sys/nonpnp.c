@@ -44,7 +44,7 @@ Environment:
 
 #include "iret_header.h"
 
-unsigned long long app_thread = 0;
+UINT64 app_thread = 0;
 
 extern void SetAppThread();
 extern void ResetAppThread();
@@ -77,14 +77,14 @@ struct IDT_ENTRY {
 #pragma pack(pop)
 #undef PACKED
 
-void* ReadIDT(unsigned char *var);
+void* ReadIDT(UCHAR *var);
 
-static unsigned long long
+static UINT64
 ReadIDTEntry(struct IDT_ENTRY *idt, int i)
 {
 	return idt[i].low +
-         (((unsigned long long)idt[i].middle) << 16) +
-         (((unsigned long long)idt[i].high) << 32);
+         (((UINT64)idt[i].middle) << 16) +
+         (((UINT64)idt[i].high) << 32);
 
 }
 
@@ -793,91 +793,96 @@ Return Value:
 
 }
 
-extern void HandleIRET();
+extern void HandleSYSCALL();
 extern void HandleSYSRET();
 extern void HandleIRETGS();
+extern void HandleSYSCALL();
 extern void HandleINTR();
-extern void SetFsGsBase(unsigned long long, unsigned long long);
-unsigned long long kernelBaseAddr = 0;
-unsigned long long fsBaseAddr = 0;
-unsigned long long gsBaseAddr = 0;
-unsigned long long _HandleIRET = 0;
-unsigned long long _HandleIRETGS = 0;
-unsigned long long _HandleSYSRET = 0;
-unsigned long long _HandleINTR = 0;
+extern void SetFsGsBase(UINT64, unsigned long long);
+UINT64 kernelBaseAddr = 0;
+UINT64 fsBaseAddr = 0;
+UINT64 gsBaseAddr = 0;
+UINT64 _HandleSYSCALL = 0;
+UINT64 _HandleIRETGS = 0;
+UINT64 _HandleSYSRET = 0;
+UINT64 _HandleINTR = 0;
+
+UINT64 _HandleSYSCALL_val = 0;
+UINT64 _HandleIRETGS_val = 0;
+UINT64 _HandleSYSRET_val = 0;
+UINT64 _HandleINTR_val = 0;
+
+
 int already_patched = 0;
 
-extern void XchgVal(unsigned long long *ptr, unsigned long long a);
+extern void XchgVal(UINT64 *ptr, unsigned long long a);
+
+void PatchPicoHelper(UINT64 *src, UINT64 *dst)
+{
+	int i;
+
+	for (i = 0; i < 200/8; i++)
+	{
+		XchgVal(&dst[i], src[i]);
+	}
+}
 
 
 void PatchPico()
 {
-	unsigned char* ptr = (unsigned char*)(kernelBaseAddr + (0x14067BBB9 - 0x140000000));
-	unsigned long long *src, *dst;
-	int i;
+	UCHAR* ptr = (UCHAR*)(kernelBaseAddr + (0x14067BBB9 - 0x140000000));
 
 	if (already_patched || !kernelBaseAddr)
 	{
 		return;
 	}
 
-	_HandleIRET = (unsigned long long)ptr;
-	_HandleIRETGS = (unsigned long long)ptr + 200;
-	_HandleSYSRET = (unsigned long long)ptr + 400;
-	_HandleINTR = (unsigned long long)ptr + 600;
+	_HandleIRETGS = (UINT64)ptr;
+	_HandleSYSRET = (UINT64)ptr + 200;
+	_HandleINTR = (UINT64)ptr + 400;
+	_HandleSYSCALL = (UINT64)ptr + 600;
 
-	src = (unsigned long long*)(unsigned long long)HandleIRET;
-	dst = (unsigned long long*)_HandleIRET;
-
-	for (i = 0; i < 200/8; i++)
-	{
-		//dst[i] = src[i];
-		XchgVal(&dst[i], src[i]);
-	}
-	
-	src = (unsigned long long*)(unsigned long long)HandleIRETGS;
-	dst = (unsigned long long*)_HandleIRETGS;
-
-
-	for (i = 0; i < 200/8; i++)
-	{
-		//dst[i] = src[i];
-		XchgVal(&dst[i], src[i]);
-	}
-
-	src = (unsigned long long*)(unsigned long long)HandleSYSRET;
-	dst = (unsigned long long*)_HandleSYSRET;
-
-
-	for (i = 0; i < 200/8; i++)
-	{
-		//dst[i] = src[i];
-		XchgVal(&dst[i], src[i]);
-	}
-
-	src = (unsigned long long*)(unsigned long long)HandleINTR;
-	dst = (unsigned long long*)_HandleINTR;
-
-
-	for (i = 0; i < 200/8; i++)
-	{
-		//dst[i] = src[i];
-		XchgVal(&dst[i], src[i]);
-	}
-
+	PatchPicoHelper((UINT64*)(UINT64)HandleIRETGS, (UINT64*)_HandleIRETGS);
+	PatchPicoHelper((UINT64*)(UINT64)HandleSYSRET, (UINT64*)_HandleSYSRET);
+	PatchPicoHelper((UINT64*)(UINT64)HandleINTR, (UINT64*)_HandleINTR);
+	PatchPicoHelper((UINT64*)(UINT64)HandleSYSCALL, (UINT64*)_HandleSYSCALL);
 	SetFsGsBase(fsBaseAddr, gsBaseAddr);
 }
 
 
+static void
+PatchFunc(UINT64 *func_arr, int len, UCHAR *func, UINT64 *old, UCHAR opcode)
+{
+	int i;
+	UCHAR *target;
+	long long diff, diff1;
+
+	for (i = 0; i < len; i++)
+	{
+		target = (UCHAR*)(kernelBaseAddr + (func_arr[i] - 0x140000000));
+		diff = func - target - 5;
+		diff1 = (diff < 0) ? -diff : diff;
+		if (diff1 < 0xffffffff)
+		{
+			UCHAR val[8];
+			UINT64 newval;
+			val[0] = opcode;
+			*(long*)&val[1] = (long)diff;
+			val[5] = 0xeb;
+			val[6] = 5;
+			newval = *(UINT64*)val;
+			*old = *(UINT64*)target;
+			//*(UINT64*)target = *(unsigned long long*)val;
+			XchgVal((UINT64*)target, newval);
+			already_patched = 1;
+		}
+	}
+}
+
 int
 PatchKernel()
 {
-	int i;
-	unsigned char *target;
-	long long diff, diff1;
-	unsigned char *func;
-
-	if (!_HandleIRET || !_HandleIRETGS || !kernelBaseAddr)
+	if (!_HandleIRETGS || !_HandleSYSRET || !_HandleSYSCALL || !kernelBaseAddr)
 	{
 		return 0;
 	}
@@ -886,122 +891,34 @@ PatchKernel()
 		return 1;
 	}
 
-	for (i = 0; i < sizeof(iret_funcs)/8; i++)
-	{
-		target = (unsigned char*)(kernelBaseAddr + (iret_funcs[i] - 0x140000000));
-		func = (target[2] == 0x55) ? (unsigned char*)_HandleIRET : (unsigned char*)_HandleIRETGS;
-		diff = func - target - 5;
-		diff1 = (diff < 0) ? -diff : diff;
-		if (diff1 < 0xffffffff && target[2] != 0x55)
-		{
-			unsigned char val[8] = {0xe9};
-			unsigned long long newval;
-			*(long*)&val[1] = (long)diff;
-			val[5] = target[2];
-			newval = *(unsigned long long*)val;
-			//*(unsigned long long*)target = *(unsigned long long*)val;
-			XchgVal((unsigned long long*)target, newval);
-			already_patched = 1;
-		}
-		else
-		{
-			//return 0;
-		}
-	}
-
-	for (i = 0; i < sizeof(sysret_funcs)/8; i++)
-	{
-		target = (unsigned char*)(kernelBaseAddr + (sysret_funcs[i] - 0x140000000));
-		func = (unsigned char*)_HandleSYSRET;
-		diff = func - target - 5;
-		diff1 = (diff < 0) ? -diff : diff;
-		if (diff1 < 0xffffffff)
-		{
-			unsigned char val[8] = {0xe9};
-			unsigned long long newval;
-			*(long*)&val[1] = (long)diff;
-			val[5] = target[2];
-			newval = *(unsigned long long*)val;
-			//*(unsigned long long*)target = *(unsigned long long*)val;
-			XchgVal((unsigned long long*)target, newval);
-			already_patched = 1;
-		}
-		else
-		{
-			//return 0;
-		}
-	}
-
-
-//#if 0
-	for (i = 0; i < sizeof(intr_funcs)/8; i++)
-	{
-		target = (unsigned char*)(kernelBaseAddr + (intr_funcs[i] - 0x140000000));
-		func = (unsigned char*)_HandleINTR;
-		diff = func - target - 5;
-		diff1 = (diff < 0) ? -diff : diff;
-		if (diff1 < 0xffffffff)
-		{
-			unsigned char val[8] = {0xe8};
-			unsigned long long newval;
-			*(long*)&val[1] = (long)diff;
-			val[5] = 0xeb;
-			val[6] = 5;
-			newval = *(unsigned long long*)val;
-			//*(unsigned long long*)target = *(unsigned long long*)val;
-			XchgVal((unsigned long long*)target, newval);
-			already_patched = 1;
-		}
-		else
-		{
-			//return 0;
-		}
-	}
-//#endif
+	PatchFunc(iret_funcs, sizeof(iret_funcs)/8, (UCHAR*)_HandleIRETGS, &_HandleIRETGS_val, 0xe9);
+	PatchFunc(sysret_funcs, sizeof(sysret_funcs)/8, (UCHAR*)_HandleSYSRET, &_HandleSYSRET_val, 0xe9);
+	PatchFunc(intr_funcs, sizeof(intr_funcs)/8, (UCHAR*)_HandleINTR, &_HandleINTR_val, 0xe8);
+	//PatchFunc(syscall_funcs, sizeof(syscall_funcs)/8, (UCHAR*)_HandleSYSCALL, &_HandleSYSCALL_val);
 	return 1;
 }
 
+static void
+UnpatchFunc(UINT64 *func_arr, int len, unsigned long long val)
+{
+	int i;
+	UCHAR *target;
+
+	for (i = 0; i < len && val; i++)
+	{
+		target = (UCHAR*)(kernelBaseAddr + (func_arr[i] - 0x140000000));
+		XchgVal((UINT64*)target, val);
+	}
+}
 
 void
 UnpatchKernel()
 {
-	int i;
-	unsigned char *target;
-
-	if (!kernelBaseAddr)
-	{
-		return;
-	}
-
-	for (i = 0; i < sizeof(iret_funcs)/8; i++)
-	{
-		target = (unsigned char*)(kernelBaseAddr + (iret_funcs[i] - 0x140000000));
-		if (target[5] == 0x55)
-		{
-			//*(unsigned long long*)target =  0xd04d8b4cd8558b4c;
-			XchgVal((unsigned long long*)target, 0xd04d8b4cd8558b4c);
-		}
-		else if (target[5] == 0x4D)
-		{
-			//*(unsigned long long*)target =  0xc8458b4cd04d8b4c;
-			XchgVal((unsigned long long*)target, 0xc8458b4cd04d8b4c);
-		}
-	}
-	for (i = 0; i < sizeof(sysret_funcs)/8; i++)
-	{
-		target = (unsigned char*)(kernelBaseAddr + (sysret_funcs[i] - 0x140000000));
-		XchgVal((unsigned long long*)target, 0x10fe08b49e98b49);
-	}
-
-	/*for (i = 0; i < sizeof(intr_funcs)/8; i++)
-	{
-		target = (unsigned char*)(kernelBaseAddr + (sysret_funcs[i] - 0x140000000));
-		XchgVal((unsigned long long*)target, 0x10fe08b49e98b49);
-	}*/
+	/*UnpatchFunc(iret_funcs, sizeof(iret_funcs)/8, _HandleIRETGS_val);
+	UnpatchFunc(sysret_funcs, sizeof(sysret_funcs)/8, _HandleSYSRET_val);
+	UnpatchFunc(intr_funcs, sizeof(intr_funcs)/8, _HandleINTR_val);
+	UnpatchFunc(syscall_funcs, sizeof(syscall_funcs)/8, _HandleSYSCALL_val);*/
 }
-
-
-
 
 VOID
 FileEvtIoDeviceControl(
@@ -1041,9 +958,9 @@ Return Value:
     PCHAR               inBuf = NULL; // pointer to Input and output buffer
     PCHAR               outBuf = NULL; // pointer to Input and output buffer
 	size_t bufSize = 0;
-	unsigned char var[16];
+	UCHAR var[16];
 	void *idt = ReadIDT(var);
-	unsigned long long idtval;
+	UINT64 idtval;
 	int i;
 
     UNREFERENCED_PARAMETER( Queue );
@@ -1079,9 +996,9 @@ Return Value:
 
         ASSERT(bufSize == InputBufferLength);
 
-		kernelBaseAddr = ((unsigned long long*)inBuf)[0];
-		gsBaseAddr = ((unsigned long long*)inBuf)[1];
-		fsBaseAddr = ((unsigned long long*)inBuf)[2];
+		kernelBaseAddr = ((UINT64*)inBuf)[0];
+		gsBaseAddr = ((UINT64*)inBuf)[1];
+		fsBaseAddr = ((UINT64*)inBuf)[2];
 
         /*status = WdfRequestRetrieveOutputBuffer(Request, 0, &outBuf, &bufSize);
         if(!NT_SUCCESS(status)) {
@@ -1097,7 +1014,7 @@ Return Value:
 
 		//PETHREAD t = PsGetCurrentThread();
     	//RtlCopyMemory(buffer, (PCHAR)t, OutputBufferLength);
-		//((unsigned long long*)t)[30] = 0x12345678912;
+		//((UINT64*)t)[30] = 0x12345678912;
 
 		PatchPico();
 		if (!PatchKernel())
@@ -1147,7 +1064,7 @@ Return Value:
 		for (i = 0; i < 256; i++)
 		{
 			idtval = ReadIDTEntry(idt, i);
-        	RtlCopyMemory(&((unsigned long long*)outBuf)[i], (PCHAR)&idtval, 8);
+        	RtlCopyMemory(&((UINT64*)outBuf)[i], (PCHAR)&idtval, 8);
 		}
         WdfRequestSetInformation(Request, OutputBufferLength);
 		break;
