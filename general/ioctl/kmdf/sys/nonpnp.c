@@ -796,6 +796,7 @@ Return Value:
 extern void HandleIRET();
 extern void HandleSYSRET();
 extern void HandleIRETGS();
+extern void HandleINTR();
 extern void SetFsGsBase(unsigned long long, unsigned long long);
 unsigned long long kernelBaseAddr = 0;
 unsigned long long fsBaseAddr = 0;
@@ -803,6 +804,7 @@ unsigned long long gsBaseAddr = 0;
 unsigned long long _HandleIRET = 0;
 unsigned long long _HandleIRETGS = 0;
 unsigned long long _HandleSYSRET = 0;
+unsigned long long _HandleINTR = 0;
 int already_patched = 0;
 
 extern void XchgVal(unsigned long long *ptr, unsigned long long a);
@@ -822,6 +824,7 @@ void PatchPico()
 	_HandleIRET = (unsigned long long)ptr;
 	_HandleIRETGS = (unsigned long long)ptr + 200;
 	_HandleSYSRET = (unsigned long long)ptr + 400;
+	_HandleINTR = (unsigned long long)ptr + 600;
 
 	src = (unsigned long long*)(unsigned long long)HandleIRET;
 	dst = (unsigned long long*)_HandleIRET;
@@ -851,6 +854,17 @@ void PatchPico()
 		//dst[i] = src[i];
 		XchgVal(&dst[i], src[i]);
 	}
+
+	src = (unsigned long long*)(unsigned long long)HandleINTR;
+	dst = (unsigned long long*)_HandleINTR;
+
+
+	for (i = 0; i < 200/8; i++)
+	{
+		//dst[i] = src[i];
+		XchgVal(&dst[i], src[i]);
+	}
+
 	SetFsGsBase(fsBaseAddr, gsBaseAddr);
 }
 
@@ -907,6 +921,31 @@ PatchKernel()
 			unsigned long long newval;
 			*(long*)&val[1] = (long)diff;
 			val[5] = target[2];
+			newval = *(unsigned long long*)val;
+			//*(unsigned long long*)target = *(unsigned long long*)val;
+			XchgVal((unsigned long long*)target, newval);
+			already_patched = 1;
+		}
+		else
+		{
+			//return 0;
+		}
+	}
+
+
+	for (i = 0; i < sizeof(intr_funcs)/8; i++)
+	{
+		target = (unsigned char*)(kernelBaseAddr + (intr_funcs[i] - 0x140000000));
+		func = (unsigned char*)_HandleINTR;
+		diff = func - target - 5;
+		diff1 = (diff < 0) ? -diff : diff;
+		if (diff1 < 0xffffffff)
+		{
+			unsigned char val[8] = {0xe8};
+			unsigned long long newval;
+			*(long*)&val[1] = (long)diff;
+			val[5] = 0xeb;
+			val[6] = 1;
 			newval = *(unsigned long long*)val;
 			//*(unsigned long long*)target = *(unsigned long long*)val;
 			XchgVal((unsigned long long*)target, newval);

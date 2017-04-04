@@ -22,8 +22,8 @@ ResetAppThread ENDP
 SetFsGsBase PROC EXPORT
 mov rax, gs:[0188h]
 mov rax, [rax+96]
-mov [rax+424], rcx
-mov [rax+432], rdx
+mov [rax+424], rdx
+mov [rax+432], rcx
 ret
 SetFsGsBase ENDP
 
@@ -45,9 +45,9 @@ jne next
 
 mov rax, [rax+96]
 mov rcx, [rax+424]
-wrfsbase rcx
-mov rcx, [rax+432]
 wrgsbase rcx
+mov rcx, [rax+432]
+wrfsbase rcx
 
 next:
 mov r9, [rbp-30h]
@@ -98,9 +98,9 @@ push rcx
 
 mov rax, [rax+96]
 mov rcx, [rax+424]
-wrfsbase rcx
-mov rcx, [rax+432]
 wrgsbase rcx
+mov rcx, [rax+432]
+wrfsbase rcx
 
 pop rcx
 
@@ -117,5 +117,23 @@ sidt [rcx]
 mov rax, [rcx+2]
 ret
 ReadIDT ENDP
+
+HandleINTR PROC EXPORT
+push rax
+rdgsbase rax
+swapgs
+mov r10, qword ptr gs:[188h]
+
+cmp r10, 07fffffffh
+jb next
+
+mov [r10+424], rax
+rdfsbase rax
+mov [r10+432], rax
+
+next:
+pop rax
+ret
+HandleINTR ENDP
 
 END
