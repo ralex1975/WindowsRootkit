@@ -44,8 +44,8 @@ cmp byte ptr[rax+07fh], 0aah
 jne next
 
 mov rax, [rax+96]
-;mov rcx, [rax+424]
-;wrgsbase rcx
+mov rcx, [rax+424]
+wrgsbase rcx
 mov rcx, [rax+432]
 wrfsbase rcx
 
@@ -83,8 +83,8 @@ jne next
 push rcx
 
 mov rax, [rax+96]
-;mov rcx, [rax+424]
-;wrgsbase rcx
+mov rcx, [rax+424]
+wrgsbase rcx
 mov rcx, [rax+432]
 wrfsbase rcx
 
@@ -151,7 +151,11 @@ jb next
 push rax
 push rdx
 
-;mov [r10+424], rax
+mov rcx, 102
+rdmsr
+shl rdx, 32
+or rdx, rax
+mov [r10+424], rdx
 rdfsbase rax
 mov [r10+432], rax
 
