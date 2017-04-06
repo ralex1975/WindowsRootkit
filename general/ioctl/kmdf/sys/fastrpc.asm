@@ -20,10 +20,15 @@ ret
 ResetAppThread ENDP
 
 SetFsGsBase PROC EXPORT
-mov rax, gs:[0188h]
-mov rax, [rax+96]
-mov [rax+424], rdx
-mov [rax+432], rcx
+mov r10, gs:[0188h]
+mov r10, [r10+96]
+mov rcx, 0c0000102h
+rdmsr
+shl rdx, 32
+or rdx, rax
+mov [r10+424], rdx
+rdfsbase rdx
+mov [r10+432], rdx
 ret
 SetFsGsBase ENDP
 
@@ -151,7 +156,7 @@ jb next
 push rax
 push rdx
 
-mov rcx, 102
+mov rcx, 0c0000102h
 rdmsr
 shl rdx, 32
 or rdx, rax

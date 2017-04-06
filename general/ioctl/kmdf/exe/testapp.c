@@ -281,7 +281,7 @@ main()
 	unsigned long long gsBaseL = ReadGSBase();
 
 	WriteFSBase(0x102345);
-	//WriteGSBase(102345);
+	WriteGSBase(0x102345);
 
 	//EnterU();
 	uFunc();
