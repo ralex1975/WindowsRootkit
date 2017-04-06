@@ -44,8 +44,8 @@ cmp byte ptr[rax+07fh], 0aah
 jne next
 
 mov rax, [rax+96]
-mov rcx, [rax+424]
-wrgsbase rcx
+;mov rcx, [rax+424]
+;wrgsbase rcx
 mov rcx, [rax+432]
 wrfsbase rcx
 
@@ -83,8 +83,8 @@ jne next
 push rcx
 
 mov rax, [rax+96]
-mov rcx, [rax+424]
-wrgsbase rcx
+;mov rcx, [rax+424]
+;wrgsbase rcx
 mov rcx, [rax+432]
 wrfsbase rcx
 
@@ -132,31 +132,37 @@ ret
 HandleINTR ENDP
 
 HandleSYSCALL PROC EXPORT
-push rax
+pop rcx
+add rcx, 2
+push rcx
+push rcx
+
 push r10
-rdgsbase rax
-swapgs
 
 mov r10, qword ptr gs:[188h]
-
 cmp r10, 07fffffffh
 jb next
-
+cmp byte ptr[r10+07fh], 0aah
+jne next
 mov r10, [r10+96]
 cmp r10, 07fffffffh
 jb next
 
-mov [r10+424], rax
+push rax
+push rdx
+
+;mov [r10+424], rax
 rdfsbase rax
 mov [r10+432], rax
 
-next:
-pop r10
+pop rdx
 pop rax
 
-add rsp, 8
-mov qword ptr gs:[10h], rsp
-sub rsp, 8
+
+next:
+
+pop r10
+mov rcx, r10
 ret
 HandleSYSCALL ENDP
 

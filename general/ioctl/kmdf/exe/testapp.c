@@ -50,6 +50,7 @@ _Analysis_mode_(_Analysis_code_type_user_code_)
 #undef TESTAPP_C
 
 VOID ReadIDT();
+VOID ReadFunc();
 
 BOOLEAN
 ManageDriver(
@@ -267,10 +268,11 @@ main()
 {
 	OpenDev();
 
-	/*ReadIDT();
+	//ReadIDT();
+	//ReadFunc();
 
-	CloseDev();
-*/
+	//CloseDev();
+
 //#if 0
 
     InitDev();
@@ -278,11 +280,12 @@ main()
 	unsigned long long fsBaseL = ReadFSBase();
 	unsigned long long gsBaseL = ReadGSBase();
 
-	//WriteFSBase(102345);
+	WriteFSBase(0x102345);
 	//WriteGSBase(102345);
 
 	//EnterU();
 	uFunc();
+	//Sleep(1);
 
 	unsigned long long gsBaseU = ReadGSBase();
 	unsigned long long fsBaseU = ReadFSBase();
@@ -434,6 +437,65 @@ ReadIDT()
 	}
 }
 
+
+
+VOID
+ReadFunc()
+{
+    unsigned long long OutputBuffer[256];
+    char InputBuffer[200];
+    BOOL bRc;
+    ULONG bytesReturned;
+
+	int i;
+
+	if (!devHandle)
+	{
+		printf("dev not opened!");
+		return;
+	}
+
+    NtQuerySystemInformationFunc NtQuerySystemInformation = NULL;
+    HMODULE hNtdll = NULL;
+    ULONG64 KernelBase = 0;
+    RTL_PROCESS_MODULES ModuleInfo = { 0 };
+
+    // Get the address of NtQuerySystemInformation
+    hNtdll = GetModuleHandle("ntdll");
+    NtQuerySystemInformation = (NtQuerySystemInformationFunc)GetProcAddress(hNtdll, "NtQuerySystemInformation");
+
+    // Get the base address of the kernel
+    NtQuerySystemInformation(SystemModuleInformation, &ModuleInfo, sizeof(ModuleInfo), NULL);
+    KernelBase = (ULONG64)ModuleInfo.Modules[0].ImageBase;
+
+	printf("KernelBase:%llx\n", KernelBase);
+    printf("\nCalling DeviceIoControl PATCH_KERNEL\n");
+
+    memset(OutputBuffer, 0, sizeof(OutputBuffer));
+	((unsigned long long*)InputBuffer)[0] = KernelBase;
+	((unsigned long long*)InputBuffer)[1] = 0xfffaa77770;
+	((unsigned long long*)InputBuffer)[2] = 0xfffee77770;
+
+
+    bRc = DeviceIoControl ( devHandle,
+                            (DWORD) IOCTL_NONPNP_READ_FUNC,
+                            InputBuffer,
+                            24,
+                            OutputBuffer,
+                            sizeof( OutputBuffer),
+                            &bytesReturned,
+                            NULL
+                            );
+
+    if ( !bRc )
+    {
+        printf ( "Error in DeviceIoControl1 : : %d", GetLastError());
+    }
+	for (i = 0; i < 64; i++)
+	{
+		printf("%hhx ", ((unsigned char*)OutputBuffer)[i]);
+	}
+}
 
 
 VOID

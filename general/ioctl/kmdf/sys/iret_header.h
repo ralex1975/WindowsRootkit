@@ -74,6 +74,5 @@ unsigned long long sysret_funcs[] = {
 	0x140155F21ULL
 };
 unsigned long long syscall_funcs[] = {
-	0x140154E00ULL,
-	0x1401550C0ULL
+	0x1401550E4ULL
 };

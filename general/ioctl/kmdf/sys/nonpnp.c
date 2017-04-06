@@ -846,12 +846,12 @@ void PatchPico()
 	PatchPicoHelper((UINT64*)(UINT64)HandleSYSRET, (UINT64*)_HandleSYSRET);
 	PatchPicoHelper((UINT64*)(UINT64)HandleINTR, (UINT64*)_HandleINTR);
 	PatchPicoHelper((UINT64*)(UINT64)HandleSYSCALL, (UINT64*)_HandleSYSCALL);
-	//SetFsGsBase(fsBaseAddr, gsBaseAddr);
+	SetFsGsBase(fsBaseAddr, gsBaseAddr);
 }
 
 
 static void
-PatchFunc(UINT64 *func_arr, int len, UCHAR *func, UINT64 *old, UCHAR opcode)
+PatchFunc(UINT64 *func_arr, int len, UCHAR *func, UINT64 *old, UCHAR opcode, UCHAR pad)
 {
 	int i;
 	UCHAR *target;
@@ -866,10 +866,11 @@ PatchFunc(UINT64 *func_arr, int len, UCHAR *func, UINT64 *old, UCHAR opcode)
 		{
 			UCHAR val[8];
 			UINT64 newval;
+			*(UINT64*)val = *(UINT64*)target;
 			val[0] = opcode;
 			*(long*)&val[1] = (long)diff;
 			val[5] = 0xeb;
-			val[6] = 5;
+			val[6] = pad;
 			newval = *(UINT64*)val;
 			*old = *(UINT64*)target;
 			//*(UINT64*)target = *(unsigned long long*)val;
@@ -891,10 +892,10 @@ PatchKernel()
 		return 1;
 	}
 
-	PatchFunc(iret_funcs, sizeof(iret_funcs)/8, (UCHAR*)_HandleIRETGS, &_HandleIRETGS_val, 0xe9);
-	PatchFunc(sysret_funcs, sizeof(sysret_funcs)/8, (UCHAR*)_HandleSYSRET, &_HandleSYSRET_val, 0xe9);
-	PatchFunc(intr_funcs, sizeof(intr_funcs)/8, (UCHAR*)_HandleINTR, &_HandleINTR_val, 0xe8);
-	//PatchFunc(syscall_funcs, sizeof(syscall_funcs)/8, (UCHAR*)_HandleSYSCALL, &_HandleSYSCALL_val, 0xe8);
+	PatchFunc(iret_funcs, sizeof(iret_funcs)/8, (UCHAR*)_HandleIRETGS, &_HandleIRETGS_val, 0xe9, 0);
+	PatchFunc(sysret_funcs, sizeof(sysret_funcs)/8, (UCHAR*)_HandleSYSRET, &_HandleSYSRET_val, 0xe9, 0);
+	PatchFunc(intr_funcs, sizeof(intr_funcs)/8, (UCHAR*)_HandleINTR, &_HandleINTR_val, 0xe8, 5);
+	PatchFunc(syscall_funcs, sizeof(syscall_funcs)/8, (UCHAR*)_HandleSYSCALL, &_HandleSYSCALL_val, 0xe8, 0);
 	return 1;
 }
 
@@ -914,10 +915,13 @@ UnpatchFunc(UINT64 *func_arr, int len, unsigned long long val)
 void
 UnpatchKernel()
 {
-	UnpatchFunc(iret_funcs, sizeof(iret_funcs)/8, _HandleIRETGS_val);
-	UnpatchFunc(sysret_funcs, sizeof(sysret_funcs)/8, _HandleSYSRET_val);
-	UnpatchFunc(intr_funcs, sizeof(intr_funcs)/8, _HandleINTR_val);
-	//UnpatchFunc(syscall_funcs, sizeof(syscall_funcs)/8, _HandleSYSCALL_val);
+	if (already_patched)
+	{
+		/*UnpatchFunc(iret_funcs, sizeof(iret_funcs)/8, _HandleIRETGS_val);
+		UnpatchFunc(sysret_funcs, sizeof(sysret_funcs)/8, _HandleSYSRET_val);
+		UnpatchFunc(intr_funcs, sizeof(intr_funcs)/8, _HandleINTR_val);
+		UnpatchFunc(syscall_funcs, sizeof(syscall_funcs)/8, _HandleSYSCALL_val);*/
+	}
 }
 
 VOID
@@ -1069,6 +1073,47 @@ Return Value:
 		}
         WdfRequestSetInformation(Request, OutputBufferLength);
 		break;
+
+	case IOCTL_NONPNP_READ_FUNC:
+
+        status = WdfRequestRetrieveInputBuffer(Request, 24, &inBuf, &bufSize);
+
+        if(!NT_SUCCESS(status)) {
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            break;
+        }
+
+        ASSERT(bufSize == InputBufferLength);
+
+		kernelBaseAddr = ((UINT64*)inBuf)[0];
+		gsBaseAddr = ((UINT64*)inBuf)[1];
+		fsBaseAddr = ((UINT64*)inBuf)[2];
+
+        status = WdfRequestRetrieveOutputBuffer(Request, 0, &outBuf, &bufSize);
+        if(!NT_SUCCESS(status)) {
+            break;
+        }
+
+        ASSERT(bufSize == OutputBufferLength);
+		if (bufSize < 256 * 8)
+		{
+            status = STATUS_INSUFFICIENT_RESOURCES;
+			break;
+		}
+
+		UCHAR* target = (UCHAR*)(kernelBaseAddr + (syscall_funcs[0] - 0x140000000));
+        //
+        // Write data to be sent to the user in this buffer
+        //
+		RtlCopyMemory(outBuf, target, 64);
+		/*for (i = 0; i < 256; i++)
+		{
+			idtval = ReadIDTEntry(idt, i);
+        	RtlCopyMemory(&((UINT64*)outBuf)[i], (PCHAR)&idtval, 8);
+		}*/
+        WdfRequestSetInformation(Request, OutputBufferLength);
+		break;
+
 
 
     default:
