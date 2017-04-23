@@ -1,3 +1,5 @@
+unsigned long long patch_pico = 0x1406833D0ULL;
+
 unsigned long long iret_funcs[] = {
 	0x14014AF67ULL,
 	0x14014B1ACULL,

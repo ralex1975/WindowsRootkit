@@ -830,7 +830,7 @@ void PatchPicoHelper(UINT64 *src, UINT64 *dst)
 
 void PatchPico()
 {
-	UCHAR* ptr = (UCHAR*)(kernelBaseAddr + (0x14067BBB9 - 0x140000000));
+	UCHAR* ptr = (UCHAR*)(kernelBaseAddr + (patch_pico - 0x140000000));
 
 	if (already_patched || !kernelBaseAddr)
 	{
